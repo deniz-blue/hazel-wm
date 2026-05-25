@@ -6,6 +6,7 @@ pub mod grabs;
 pub mod input;
 pub mod backend;
 pub mod core;
+pub mod lua;
 
 use smithay::reexports::{calloop::EventLoop, wayland_server::Display};
 

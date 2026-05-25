@@ -6,7 +6,9 @@ edition = "2024"
 [dependencies]
 tracing-subscriber = { version = "0.3.16", features = ["env-filter"] }
 bitflags = "2.2.1"
-mlua = { version = "0.11.6", features = ["luajit", "macros", "mlua_derive", "serde", "userdata-wrappers"] }
+mlua = { version = "0.11.6", features = ["macros", "mlua_derive", "serde", "userdata-wrappers"] }
+mlua-pkg = "0.3.0"
+calloop-notify = "0.2.0"
 
 [dependencies.smithay]
 version = "0.7.0"

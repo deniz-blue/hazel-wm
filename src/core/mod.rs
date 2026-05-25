@@ -1,5 +1,6 @@
-use std::{ffi::OsString, sync::Arc};
+use std::{ffi::OsString, path::Path, sync::Arc};
 
+use calloop_notify::notify::{RecursiveMode, Watcher};
 use smithay::{
     desktop::{PopupManager, Space, Window, WindowSurfaceType},
     input::{Seat, SeatState},
@@ -15,7 +16,7 @@ use smithay::{
     },
 };
 
-use crate::core::client_state::ClientState;
+use crate::{core::client_state::ClientState, lua::HazelLua};
 
 pub mod client_state;
 pub mod handlers;
@@ -29,6 +30,8 @@ pub struct Hazel {
     pub loop_signal: LoopSignal,
 
     pub smithay: HazelSmithay,
+
+    pub lua: HazelLua,
 
     pub seat: Seat<Self>,
 }
@@ -69,6 +72,8 @@ impl Hazel {
 
         let socket_name = Self::init_wayland_listener(display, event_loop);
 
+        Self::init_lua_files_listener(event_loop);
+
         let loop_signal = event_loop.get_signal();
 
         Self {
@@ -88,6 +93,8 @@ impl Hazel {
                 data_device_state,
                 popups,
             },
+
+            lua: HazelLua::new(),
 
             seat,
         }
@@ -127,6 +134,25 @@ impl Hazel {
             .unwrap();
 
         socket_name
+    }
+
+    fn init_lua_files_listener(event_loop: &mut EventLoop<Self>) {
+        let loop_handle = event_loop.handle();
+        let mut notify_source = calloop_notify::NotifySource::new().unwrap();
+        notify_source
+            .watch(Path::new("./test"), RecursiveMode::Recursive)
+            .unwrap();
+
+        loop_handle
+            .insert_source(notify_source, |event, _, hazel| {
+                if !event.kind.is_modify() {
+                    return;
+                }
+
+                println!("Notify Event: {event:?}");
+                hazel.lua = HazelLua::new();
+            })
+            .unwrap();
     }
 
     pub fn surface_under(

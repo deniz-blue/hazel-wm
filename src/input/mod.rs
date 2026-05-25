@@ -22,6 +22,8 @@ impl Hazel {
 
 				println!("Key event: code={:?}, state={:?}, serial={:?}, time={:?}", event.key_code(), event.state(), serial, time);
 
+				self.lua.input_events.emit(&self.lua.lua, "key", event.key_code().raw());
+
                 self.seat.get_keyboard().unwrap().input::<(), _>(
                     self,
                     event.key_code(),
