@@ -1,10 +1,10 @@
-use std::{collections::HashMap, sync::Mutex};
+use std::{cell::RefCell, collections::HashMap};
 
 use mlua::{Function, IntoLuaMulti, RegistryKey, UserData};
 
 #[derive(Default)]
 pub struct LuaEventHandler {
-    handlers: Mutex<HashMap<String, Vec<RegistryKey>>>,
+    handlers: RefCell<HashMap<String, Vec<RegistryKey>>>,
 }
 
 impl LuaEventHandler {
@@ -14,8 +14,7 @@ impl LuaEventHandler {
 
     pub fn add(&self, event_name: String, handler: RegistryKey) -> Result<(), mlua::Error> {
         self.handlers
-            .lock()
-            .unwrap()
+            .borrow_mut()
             .entry(event_name)
             .or_default()
             .push(handler);
@@ -38,7 +37,7 @@ impl LuaEventHandler {
         event_name: String,
         args: A,
     ) -> Result<(), mlua::Error> {
-        if let Some(handlers) = self.handlers.lock().unwrap().get(&event_name) {
+        if let Some(handlers) = self.handlers.borrow_mut().get(&event_name) {
             for handler in handlers {
                 if let Ok(handler_fn) = lua.registry_value::<Function>(handler) {
                     let _ = handler_fn.call::<mlua::Value>(args.clone());
@@ -50,7 +49,7 @@ impl LuaEventHandler {
 }
 
 pub trait LuaEventSource {
-	fn events(&self) -> &LuaEventHandler;
+    fn events(&self) -> &LuaEventHandler;
 }
 
 impl UserData for LuaEventHandler {

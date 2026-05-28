@@ -16,14 +16,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut state = Hazel::new(&mut event_loop)?;
 
     let backend = Backend::new_winit();
-    backend.initialize(&mut state, &mut event_loop)?;
+    backend.initialize(&mut state.borrow_mut(), &mut event_loop)?;
 
     // Safety: single threaded
-    unsafe { std::env::set_var("WAYLAND_DISPLAY", &state.compositor.socket_name) };
+    unsafe { std::env::set_var("WAYLAND_DISPLAY", &state.borrow().compositor.socket_name) };
 
     spawn_client();
 
-    event_loop.run(None, &mut state, move |_| {
+    event_loop.run(None, &mut state.borrow_mut(), move |_| {
         //
     })?;
 

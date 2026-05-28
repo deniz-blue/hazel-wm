@@ -2,34 +2,28 @@ use std::sync::Arc;
 
 use mlua::Lua;
 
-use crate::lua::api::wm::Wm;
+use crate::lua::{HazelHandle, api::wm::Wm};
 
 pub struct HazelLua {
     pub lua: Lua,
-    pub wm: Arc<Wm>,
-}
-
-impl Default for HazelLua {
-    fn default() -> Self {
-        Self {
-            lua: Lua::new(),
-            wm: Default::default(),
-        }
-    }
+    pub wm: Option<Arc<Wm>>,
 }
 
 impl HazelLua {
-    pub fn new() -> Self {
-        let mut this = Self::default();
-        if let Err(err) = this.reload() {
-            eprintln!("Failed to initialize Lua runtime: {err}");
+    pub fn new_uninit() -> Self {
+        Self {
+            lua: Lua::new(),
+            wm: None,
         }
-        this
     }
 
-    pub fn reload(&mut self) -> Result<(), mlua::Error> {
+    pub fn wm(&self) -> Arc<Wm> {
+        self.wm.as_ref().unwrap().clone()
+    }
+
+    pub fn init(&mut self, hazel: HazelHandle) -> Result<(), mlua::Error> {
         self.lua = Lua::new();
-        self.wm = Default::default();
+        self.wm = Some(Arc::new(Wm::new(hazel)));
 
         let globals = self.lua.globals();
         globals.set("wm", self.wm.clone())?;
