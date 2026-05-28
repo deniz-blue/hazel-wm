@@ -1,67 +1,77 @@
-use std::{
-    collections::HashMap,
-    sync::{Arc, Mutex},
-};
+use std::{collections::HashMap, sync::Mutex};
 
-use mlua::{Function, IntoLua, RegistryKey, UserData};
+use mlua::{Function, IntoLuaMulti, RegistryKey, UserData};
 
-#[derive(Clone, Default)]
+#[derive(Default)]
 pub struct LuaEventHandler {
-    handlers: Arc<Mutex<HashMap<String, Vec<RegistryKey>>>>,
+    handlers: Mutex<HashMap<String, Vec<RegistryKey>>>,
 }
 
 impl LuaEventHandler {
-    pub fn register(
-        &self,
-        lua: &mlua::Lua,
-        event_name: String,
-        handler: Function,
-    ) -> Result<(), mlua::Error> {
-        let key = lua.create_registry_value(handler)?;
+    pub fn new() -> Self {
+        Default::default()
+    }
+
+    pub fn add(&self, event_name: String, handler: RegistryKey) -> Result<(), mlua::Error> {
         self.handlers
             .lock()
             .unwrap()
             .entry(event_name)
             .or_default()
-            .push(key);
+            .push(handler);
         Ok(())
     }
 
-    pub fn emit<D: IntoLua>(&self, lua: &mlua::Lua, event_name: &str, data: D) -> Result<(), mlua::Error> {
-        self.emit_with_hook(lua, event_name, data, || Ok(()))
-    }
-
-    pub fn emit_with_hook<D: IntoLua, H: FnMut() -> Result<(), mlua::Error>>(
+    pub fn add_function(
         &self,
         lua: &mlua::Lua,
-        event_name: &str,
-        data: D,
-        mut after_each: H,
+        event_name: String,
+        handler: Function,
     ) -> Result<(), mlua::Error> {
-        let data_lua = data.into_lua(lua)?;
+        let registry_key = lua.create_registry_value(handler)?;
+        self.add(event_name, registry_key)
+    }
 
-        if let Some(handlers) = self.handlers.lock().unwrap().get(event_name) {
+    pub fn emit<A: IntoLuaMulti + Clone>(
+        &self,
+        lua: &mlua::Lua,
+        event_name: String,
+        args: A,
+    ) -> Result<(), mlua::Error> {
+        if let Some(handlers) = self.handlers.lock().unwrap().get(&event_name) {
             for handler in handlers {
-                let func = lua.registry_value::<Function>(handler)?;
-                if let Err(err) = func.call::<()>(data_lua.clone()) {
-                    eprintln!("Lua handler error for '{event_name}': {err}");
+                if let Ok(handler_fn) = lua.registry_value::<Function>(handler) {
+                    let _ = handler_fn.call::<mlua::Value>(args.clone());
                 }
-
-                after_each()?;
             }
         }
-
         Ok(())
     }
 }
 
+pub trait LuaEventSource {
+	fn events(&self) -> &LuaEventHandler;
+}
+
 impl UserData for LuaEventHandler {
     fn add_methods<M: mlua::prelude::LuaUserDataMethods<Self>>(methods: &mut M) {
-        methods.add_method_mut(
+        methods.add_method(
             "on",
             |lua, this, (event_name, handler): (String, Function)| {
-                this.register(lua, event_name, handler)
+                this.add_function(lua, event_name, handler)
             },
         );
     }
+}
+
+#[macro_export]
+macro_rules! impl_lua_event_handler {
+    ($methods:ident) => {
+        $methods.add_method(
+            "on",
+            |lua: &mlua::Lua, this, (event_name, handler): (String, Function)| {
+                this.events().add_function(lua, event_name, handler)
+            },
+        );
+    };
 }

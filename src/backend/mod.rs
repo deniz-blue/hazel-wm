@@ -78,8 +78,8 @@ impl Backend {
                                     None,
                                 );
                             }
-                            WinitEvent::Input(_) => {
-                                // TODO
+                            WinitEvent::Input(event) => {
+                                state.process_input(event);
                             }
                             WinitEvent::Redraw => {
                                 let size = backend.window_size();

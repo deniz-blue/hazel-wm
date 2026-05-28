@@ -1,12 +1,20 @@
+use std::sync::Arc;
+
 use mlua::Lua;
 
+use crate::lua::api::wm::Wm;
+
 pub struct HazelLua {
-    lua: Lua,
+    pub lua: Lua,
+    pub wm: Arc<Wm>,
 }
 
 impl Default for HazelLua {
     fn default() -> Self {
-        Self { lua: Lua::new() }
+        Self {
+            lua: Lua::new(),
+            wm: Default::default(),
+        }
     }
 }
 
@@ -21,6 +29,10 @@ impl HazelLua {
 
     pub fn reload(&mut self) -> Result<(), mlua::Error> {
         self.lua = Lua::new();
+        self.wm = Default::default();
+
+        let globals = self.lua.globals();
+        globals.set("wm", self.wm.clone())?;
 
         self.lua
             .load(r#"package.path = package.path .. ";./test/?.lua""#)

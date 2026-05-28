@@ -11,6 +11,7 @@ use crate::{core::compositor::HazelCompositor, lua::runtime::HazelLua};
 pub mod client_state;
 pub mod compositor;
 pub mod handlers;
+pub mod input;
 
 pub struct Hazel {
     pub display_handle: DisplayHandle,

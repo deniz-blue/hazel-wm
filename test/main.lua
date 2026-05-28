@@ -1,9 +1,5 @@
--- print("meow")
+print("Meowing on " .. wm.name)
 
--- input:on("key", function (data)
--- 	print("key event: " .. data)
-
--- 	if data == 28 then
--- 		os.spawn("alacritty", {})
--- 	end
--- end)
+wm.input:on("event", function (data)
+	print("MEOW EVENT")
+end)
