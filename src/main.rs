@@ -1,10 +1,7 @@
 #![allow(irrefutable_let_patterns)]
 
-pub mod handlers;
-
 pub mod backend;
 pub mod core;
-pub mod grabs;
 pub mod lua;
 
 use smithay::reexports::calloop::EventLoop;
