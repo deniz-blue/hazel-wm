@@ -11,9 +11,9 @@ use smithay::{
     utils::SERIAL_COUNTER,
 };
 
-use crate::core::Hazel;
+use crate::core::{HazelCompositor, app_events::AppEvent};
 
-impl Hazel {
+impl HazelCompositor {
     pub fn process_input_event<I: InputBackend>(&mut self, event: InputEvent<I>) {
         match event {
             InputEvent::Keyboard { event, .. } => {
@@ -22,7 +22,7 @@ impl Hazel {
 
 				println!("Key event: code={:?}, state={:?}, serial={:?}, time={:?}", event.key_code(), event.state(), serial, time);
 
-				self.lua.input_events.emit(&self.lua.lua, "key", event.key_code().raw());
+				// self.emit_lua(AppEvent::KeyPress { keycode: event.key_code().raw(), serial: serial.into(), time });
 
                 self.seat.get_keyboard().unwrap().input::<(), _>(
                     self,

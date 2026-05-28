@@ -4,7 +4,7 @@ use crate::core::Hazel;
 
 impl DataDeviceHandler for Hazel {
     fn data_device_state(&self) -> &DataDeviceState {
-        &self.smithay.data_device_state
+        &self.compositor.smithay.data_device_state
     }
 }
 

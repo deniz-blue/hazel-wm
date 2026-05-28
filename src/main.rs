@@ -2,28 +2,27 @@
 
 pub mod handlers;
 
-pub mod grabs;
-pub mod input;
 pub mod backend;
 pub mod core;
+pub mod grabs;
 pub mod lua;
 
-use smithay::reexports::{calloop::EventLoop, wayland_server::Display};
+use smithay::reexports::calloop::EventLoop;
 
+use crate::backend::Backend;
 use crate::core::Hazel;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     init_logging();
 
     let mut event_loop: EventLoop<Hazel> = EventLoop::try_new()?;
+    let mut state = Hazel::new(&mut event_loop)?;
 
-    let display: Display<Hazel> = Display::new()?;
+    let backend = Backend::new_winit();
+    backend.initialize(&mut state, &mut event_loop)?;
 
-    let mut state = Hazel::new(&mut event_loop, display);
-
-    crate::backend::winit::init_winit(&mut event_loop, &mut state)?;
-
-    unsafe { std::env::set_var("WAYLAND_DISPLAY", &state.socket_name) };
+    // Safety: single threaded
+    unsafe { std::env::set_var("WAYLAND_DISPLAY", &state.compositor.socket_name) };
 
     spawn_client();
 

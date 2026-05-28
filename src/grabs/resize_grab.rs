@@ -3,7 +3,7 @@
 //! eg. Usually whenever a user clicks on the app's border and starts dragging, the compositors
 //! enters a ResizeSurfaceGrab state.
 
-use crate::Hazel;
+use crate::HazelCompositor;
 use smithay::{
     desktop::{Space, Window},
     input::pointer::{
@@ -44,7 +44,7 @@ impl From<xdg_toplevel::ResizeEdge> for ResizeEdge {
 }
 
 pub struct ResizeSurfaceGrab {
-    start_data: PointerGrabStartData<Hazel>,
+    start_data: PointerGrabStartData<HazelCompositor>,
     window: Window,
 
     edges: ResizeEdge,
@@ -55,7 +55,7 @@ pub struct ResizeSurfaceGrab {
 
 impl ResizeSurfaceGrab {
     pub fn start(
-        start_data: PointerGrabStartData<Hazel>,
+        start_data: PointerGrabStartData<HazelCompositor>,
         window: Window,
         edges: ResizeEdge,
         initial_window_rect: Rectangle<i32, Logical>,
@@ -76,11 +76,11 @@ impl ResizeSurfaceGrab {
     }
 }
 
-impl PointerGrab<Hazel> for ResizeSurfaceGrab {
+impl PointerGrab<HazelCompositor> for ResizeSurfaceGrab {
     fn motion(
         &mut self,
-        data: &mut Hazel,
-        handle: &mut PointerInnerHandle<'_, Hazel>,
+        data: &mut HazelCompositor,
+        handle: &mut PointerInnerHandle<'_, HazelCompositor>,
         _focus: Option<(WlSurface, Point<f64, Logical>)>,
         event: &MotionEvent,
     ) {
@@ -137,8 +137,8 @@ impl PointerGrab<Hazel> for ResizeSurfaceGrab {
 
     fn relative_motion(
         &mut self,
-        data: &mut Hazel,
-        handle: &mut PointerInnerHandle<'_, Hazel>,
+        data: &mut HazelCompositor,
+        handle: &mut PointerInnerHandle<'_, HazelCompositor>,
         focus: Option<(WlSurface, Point<f64, Logical>)>,
         event: &RelativeMotionEvent,
     ) {
@@ -147,8 +147,8 @@ impl PointerGrab<Hazel> for ResizeSurfaceGrab {
 
     fn button(
         &mut self,
-        data: &mut Hazel,
-        handle: &mut PointerInnerHandle<'_, Hazel>,
+        data: &mut HazelCompositor,
+        handle: &mut PointerInnerHandle<'_, HazelCompositor>,
         event: &ButtonEvent,
     ) {
         handle.button(data, event);
@@ -180,21 +180,21 @@ impl PointerGrab<Hazel> for ResizeSurfaceGrab {
 
     fn axis(
         &mut self,
-        data: &mut Hazel,
-        handle: &mut PointerInnerHandle<'_, Hazel>,
+        data: &mut HazelCompositor,
+        handle: &mut PointerInnerHandle<'_, HazelCompositor>,
         details: AxisFrame,
     ) {
         handle.axis(data, details)
     }
 
-    fn frame(&mut self, data: &mut Hazel, handle: &mut PointerInnerHandle<'_, Hazel>) {
+    fn frame(&mut self, data: &mut HazelCompositor, handle: &mut PointerInnerHandle<'_, HazelCompositor>) {
         handle.frame(data);
     }
 
     fn gesture_swipe_begin(
         &mut self,
-        data: &mut Hazel,
-        handle: &mut PointerInnerHandle<'_, Hazel>,
+        data: &mut HazelCompositor,
+        handle: &mut PointerInnerHandle<'_, HazelCompositor>,
         event: &GestureSwipeBeginEvent,
     ) {
         handle.gesture_swipe_begin(data, event)
@@ -202,8 +202,8 @@ impl PointerGrab<Hazel> for ResizeSurfaceGrab {
 
     fn gesture_swipe_update(
         &mut self,
-        data: &mut Hazel,
-        handle: &mut PointerInnerHandle<'_, Hazel>,
+        data: &mut HazelCompositor,
+        handle: &mut PointerInnerHandle<'_, HazelCompositor>,
         event: &GestureSwipeUpdateEvent,
     ) {
         handle.gesture_swipe_update(data, event)
@@ -211,8 +211,8 @@ impl PointerGrab<Hazel> for ResizeSurfaceGrab {
 
     fn gesture_swipe_end(
         &mut self,
-        data: &mut Hazel,
-        handle: &mut PointerInnerHandle<'_, Hazel>,
+        data: &mut HazelCompositor,
+        handle: &mut PointerInnerHandle<'_, HazelCompositor>,
         event: &GestureSwipeEndEvent,
     ) {
         handle.gesture_swipe_end(data, event)
@@ -220,8 +220,8 @@ impl PointerGrab<Hazel> for ResizeSurfaceGrab {
 
     fn gesture_pinch_begin(
         &mut self,
-        data: &mut Hazel,
-        handle: &mut PointerInnerHandle<'_, Hazel>,
+        data: &mut HazelCompositor,
+        handle: &mut PointerInnerHandle<'_, HazelCompositor>,
         event: &GesturePinchBeginEvent,
     ) {
         handle.gesture_pinch_begin(data, event)
@@ -229,8 +229,8 @@ impl PointerGrab<Hazel> for ResizeSurfaceGrab {
 
     fn gesture_pinch_update(
         &mut self,
-        data: &mut Hazel,
-        handle: &mut PointerInnerHandle<'_, Hazel>,
+        data: &mut HazelCompositor,
+        handle: &mut PointerInnerHandle<'_, HazelCompositor>,
         event: &GesturePinchUpdateEvent,
     ) {
         handle.gesture_pinch_update(data, event)
@@ -238,8 +238,8 @@ impl PointerGrab<Hazel> for ResizeSurfaceGrab {
 
     fn gesture_pinch_end(
         &mut self,
-        data: &mut Hazel,
-        handle: &mut PointerInnerHandle<'_, Hazel>,
+        data: &mut HazelCompositor,
+        handle: &mut PointerInnerHandle<'_, HazelCompositor>,
         event: &GesturePinchEndEvent,
     ) {
         handle.gesture_pinch_end(data, event)
@@ -247,8 +247,8 @@ impl PointerGrab<Hazel> for ResizeSurfaceGrab {
 
     fn gesture_hold_begin(
         &mut self,
-        data: &mut Hazel,
-        handle: &mut PointerInnerHandle<'_, Hazel>,
+        data: &mut HazelCompositor,
+        handle: &mut PointerInnerHandle<'_, HazelCompositor>,
         event: &GestureHoldBeginEvent,
     ) {
         handle.gesture_hold_begin(data, event)
@@ -256,18 +256,18 @@ impl PointerGrab<Hazel> for ResizeSurfaceGrab {
 
     fn gesture_hold_end(
         &mut self,
-        data: &mut Hazel,
-        handle: &mut PointerInnerHandle<'_, Hazel>,
+        data: &mut HazelCompositor,
+        handle: &mut PointerInnerHandle<'_, HazelCompositor>,
         event: &GestureHoldEndEvent,
     ) {
         handle.gesture_hold_end(data, event)
     }
 
-    fn start_data(&self) -> &PointerGrabStartData<Hazel> {
+    fn start_data(&self) -> &PointerGrabStartData<HazelCompositor> {
         &self.start_data
     }
 
-    fn unset(&mut self, _data: &mut Hazel) {}
+    fn unset(&mut self, _data: &mut HazelCompositor) {}
 }
 
 /// State of the resize operation.

@@ -14,7 +14,7 @@ impl BufferHandler for Hazel {
 
 impl ShmHandler for Hazel {
     fn shm_state(&self) -> &ShmState {
-        &self.smithay.shm_state
+        &self.compositor.smithay.shm_state
     }
 }
 

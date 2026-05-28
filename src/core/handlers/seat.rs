@@ -10,6 +10,6 @@ impl SeatHandler for Hazel {
     type PointerFocus = WlSurface;
     type TouchFocus = WlSurface;
     fn seat_state(&mut self) -> &mut SeatState<Self> {
-        &mut self.smithay.seat_state
+        &mut self.compositor.smithay.seat_state
     }
 }

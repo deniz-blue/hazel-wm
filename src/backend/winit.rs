@@ -14,10 +14,13 @@ use smithay::{
 };
 
 use crate::Hazel;
+use std::sync::{Arc, Mutex};
+use crate::lua::runtime::LuaRuntime;
 
 pub fn init_winit(
     event_loop: &mut EventLoop<Hazel>,
     state: &mut Hazel,
+    lua_runtime: Arc<Mutex<LuaRuntime>>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let (mut backend, winit) = winit::init_from_attributes(WindowAttributes::default().with_title("Hazel"))?;
 
@@ -64,7 +67,24 @@ pub fn init_winit(
                         None,
                     );
                 }
-                WinitEvent::Input(event) => state.process_input_event(event),
+                WinitEvent::Input(event) => {
+                    use smithay::backend::input::InputEvent;
+
+                    match &event {
+                        InputEvent::Keyboard { event, .. } => {
+                            let serial = smithay::utils::SERIAL_COUNTER.next_serial();
+                            let time = smithay::backend::input::Event::time_msec(event);
+                            // Emit to Lua runtime immediately
+                            if let Ok(mut rt) = lua_runtime.lock() {
+                                let mut apply_layout = |layout: &str| state.set_keyboard_layout_now(layout);
+                                rt.emit_keypress(event.key_code().raw(), serial.into(), time, &mut apply_layout);
+                            }
+                        }
+                        _ => {}
+                    }
+
+                    state.process_input_event(event)
+                }
                 WinitEvent::Redraw => {
                     let size = backend.window_size();
                     let damage = Rectangle::from_size(size);

@@ -1,5 +1,7 @@
 use smithay::{
-    desktop::{PopupKind, PopupManager, Space, Window, find_popup_root_surface, get_popup_toplevel_coords},
+    desktop::{
+        PopupKind, PopupManager, Space, Window, find_popup_root_surface, get_popup_toplevel_coords,
+    },
     input::{
         Seat,
         pointer::{Focus, GrabStartData as PointerGrabStartData},
@@ -21,101 +23,103 @@ use smithay::{
     },
 };
 
-use crate::{
-    Hazel,
-    grabs::{MoveSurfaceGrab, ResizeSurfaceGrab},
-};
+use crate::core::Hazel;
 
 impl XdgShellHandler for Hazel {
     fn xdg_shell_state(&mut self) -> &mut XdgShellState {
-        &mut self.smithay.xdg_shell_state
+        &mut self.compositor.smithay.xdg_shell_state
     }
 
     fn new_toplevel(&mut self, surface: ToplevelSurface) {
         let window = Window::new_wayland_window(surface);
-        self.space.map_element(window, (0, 0), false);
+        self.compositor.space.map_element(window, (0, 0), false);
     }
 
     fn new_popup(&mut self, surface: PopupSurface, _positioner: PositionerState) {
-        self.unconstrain_popup(&surface);
-        let _ = self.smithay.popups.track_popup(PopupKind::Xdg(surface));
+        // self.compositor.unconstrain_popup(&surface);
+        let _ = self.compositor.smithay.popups.track_popup(PopupKind::Xdg(surface));
     }
 
-    fn reposition_request(&mut self, surface: PopupSurface, positioner: PositionerState, token: u32) {
+    fn reposition_request(
+        &mut self,
+        surface: PopupSurface,
+        positioner: PositionerState,
+        token: u32,
+    ) {
         surface.with_pending_state(|state| {
             let geometry = positioner.get_geometry();
             state.geometry = geometry;
             state.positioner = positioner;
         });
-        self.unconstrain_popup(&surface);
+        // self.compositor.unconstrain_popup(&surface);
         surface.send_repositioned(token);
     }
 
-    fn move_request(&mut self, surface: ToplevelSurface, seat: wl_seat::WlSeat, serial: Serial) {
-        let seat = Seat::from_resource(&seat).unwrap();
+    // fn move_request(&mut self, surface: ToplevelSurface, seat: wl_seat::WlSeat, serial: Serial) {
+    //     let seat = Seat::from_resource(&seat).unwrap();
 
-        let wl_surface = surface.wl_surface();
+    //     let wl_surface = surface.wl_surface();
 
-        if let Some(start_data) = check_grab(&seat, wl_surface, serial) {
-            let pointer = seat.get_pointer().unwrap();
+    //     if let Some(start_data) = check_grab(&seat, wl_surface, serial) {
+    //         let pointer = seat.get_pointer().unwrap();
 
-            let window = self
-                .space
-                .elements()
-                .find(|w| w.toplevel().unwrap().wl_surface() == wl_surface)
-                .unwrap()
-                .clone();
-            let initial_window_location = self.space.element_location(&window).unwrap();
+    //         let window = self
+    //             .space
+    //             .elements()
+    //             .find(|w| w.toplevel().unwrap().wl_surface() == wl_surface)
+    //             .unwrap()
+    //             .clone();
+    //         let initial_window_location = self.space.element_location(&window).unwrap();
 
-            let grab = MoveSurfaceGrab {
-                start_data,
-                window,
-                initial_window_location,
-            };
+    //         let grab = MoveSurfaceGrab {
+    //             start_data,
+    //             window,
+    //             initial_window_location,
+    //         };
 
-            pointer.set_grab(self, grab, serial, Focus::Clear);
-        }
-    }
+    //         pointer.set_grab(self, grab, serial, Focus::Clear);
+    //     }
+    // }
 
-    fn resize_request(
-        &mut self,
-        surface: ToplevelSurface,
-        seat: wl_seat::WlSeat,
-        serial: Serial,
-        edges: xdg_toplevel::ResizeEdge,
-    ) {
-        let seat = Seat::from_resource(&seat).unwrap();
+    // fn resize_request(
+    //     &mut self,
+    //     surface: ToplevelSurface,
+    //     seat: wl_seat::WlSeat,
+    //     serial: Serial,
+    //     edges: xdg_toplevel::ResizeEdge,
+    // ) {
+    //     let seat = Seat::from_resource(&seat).unwrap();
 
-        let wl_surface = surface.wl_surface();
+    //     let wl_surface = surface.wl_surface();
 
-        if let Some(start_data) = check_grab(&seat, wl_surface, serial) {
-            let pointer = seat.get_pointer().unwrap();
+    //     if let Some(start_data) = check_grab(&seat, wl_surface, serial) {
+    //         let pointer = seat.get_pointer().unwrap();
 
-            let window = self
-                .space
-                .elements()
-                .find(|w| w.toplevel().unwrap().wl_surface() == wl_surface)
-                .unwrap()
-                .clone();
-            let initial_window_location = self.space.element_location(&window).unwrap();
-            let initial_window_size = window.geometry().size;
+    //         let window = self
+    //             .space
+    //             .elements()
+    //             .find(|w| w.toplevel().unwrap().wl_surface() == wl_surface)
+    //             .unwrap()
+    //             .clone();
+    //         let initial_window_location = self.space.element_location(&window).unwrap();
+    //         let initial_window_size = window.geometry().size;
 
-            surface.with_pending_state(|state| {
-                state.states.set(xdg_toplevel::State::Resizing);
-            });
+    //         surface.with_pending_state(|state| {
+    //             state.states.set(xdg_toplevel::State::Resizing);
+    //         });
 
-            surface.send_pending_configure();
+    //         surface.send_pending_configure();
 
-            let grab = ResizeSurfaceGrab::start(
-                start_data,
-                window,
-                edges.into(),
-                Rectangle::new(initial_window_location, initial_window_size),
-            );
+    //         let grab = ResizeSurfaceGrab::start(
+    //             start_data,
+    //             window,
+    //             edges.into(),
+    //             Rectangle::new(initial_window_location, initial_window_size),
+    //         );
 
-            pointer.set_grab(self, grab, serial, Focus::Clear);
-        }
-    }
+    //         pointer.set_grab(self, grab, serial, Focus::Clear);
+    //     }
+    // }
 
     fn grab(&mut self, _surface: PopupSurface, _seat: wl_seat::WlSeat, _serial: Serial) {
         // TODO popup grabs
@@ -184,34 +188,33 @@ pub fn handle_commit(popups: &mut PopupManager, space: &Space<Window>, surface: 
     }
 }
 
-impl Hazel {
-    fn unconstrain_popup(&self, popup: &PopupSurface) {
-        let Ok(root) = find_popup_root_surface(&PopupKind::Xdg(popup.clone())) else {
-            return;
-        };
-        let Some(window) = self
-            .space
-            .elements()
-            .find(|w| w.toplevel().unwrap().wl_surface() == &root)
-        else {
-            return;
-        };
+// impl HazelCompositor {
+//     fn unconstrain_popup(&self, popup: &PopupSurface) {
+//         let Ok(root) = find_popup_root_surface(&PopupKind::Xdg(popup.clone())) else {
+//             return;
+//         };
+//         let Some(window) = self
+//             .space
+//             .elements()
+//             .find(|w| w.toplevel().unwrap().wl_surface() == &root)
+//         else {
+//             return;
+//         };
 
-        let output = self.space.outputs().next().unwrap();
-        let output_geo = self.space.output_geometry(output).unwrap();
-        let window_geo = self.space.element_geometry(window).unwrap();
+//         let output = self.space.outputs().next().unwrap();
+//         let output_geo = self.space.output_geometry(output).unwrap();
+//         let window_geo = self.space.element_geometry(window).unwrap();
 
-        // The target geometry for the positioner should be relative to its parent's geometry, so
-        // we will compute that here.
-        let mut target = output_geo;
-        target.loc -= get_popup_toplevel_coords(&PopupKind::Xdg(popup.clone()));
-        target.loc -= window_geo.loc;
+//         // The target geometry for the positioner should be relative to its parent's geometry, so
+//         // we will compute that here.
+//         let mut target = output_geo;
+//         target.loc -= get_popup_toplevel_coords(&PopupKind::Xdg(popup.clone()));
+//         target.loc -= window_geo.loc;
 
-        popup.with_pending_state(|state| {
-            state.geometry = state.positioner.get_unconstrained_geometry(target);
-        });
-    }
-}
+//         popup.with_pending_state(|state| {
+//             state.geometry = state.positioner.get_unconstrained_geometry(target);
+//         });
+//     }
+// }
 
 smithay::delegate_xdg_shell!(Hazel);
-
