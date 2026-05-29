@@ -1,12 +1,14 @@
-use std::{cell::RefCell, path::Path, sync::Arc};
+use std::{cell::Cell, rc::Rc, time::Instant};
 
-use calloop_notify::notify::{RecursiveMode, Watcher};
 use smithay::reexports::{
     calloop::{EventLoop, Interest, LoopSignal, Mode, PostAction, generic::Generic},
     wayland_server::{Display, DisplayHandle},
 };
 
-use crate::{core::compositor::HazelCompositor, lua::{HazelHandle, api::wm::Wm, runtime::HazelLua}};
+use crate::{
+    core::compositor::HazelCompositor,
+    lua::{api::wm::Wm, runtime::HazelLua},
+};
 
 pub mod client_state;
 pub mod compositor;
@@ -14,14 +16,18 @@ pub mod handlers;
 pub mod input;
 
 pub struct Hazel {
+    pub start_time: Instant,
     pub display_handle: DisplayHandle,
     pub loop_signal: LoopSignal,
     pub compositor: HazelCompositor,
     pub lua: HazelLua,
 }
 
+pub type HazelEventLoop<'a> = EventLoop<'a, Hazel>;
+
 impl Hazel {
-    pub fn new(event_loop: &mut EventLoop<Self>) -> Result<HazelHandle, Box<dyn std::error::Error>> {
+    pub fn new(event_loop: &mut HazelEventLoop) -> Result<Self, Box<dyn std::error::Error>> {
+        let start_time = std::time::Instant::now();
         let display = Display::new()?;
         let display_handle = display.handle();
         let compositor = HazelCompositor::new(event_loop, &display_handle);
@@ -39,34 +45,54 @@ impl Hazel {
             },
         )?;
 
-        let this = Self {
+        Ok(Self {
+            start_time,
             display_handle,
             loop_signal,
             compositor,
             lua,
-        };
-
-		let handle = HazelHandle::new(RefCell::new(this));
-		
-		handle.borrow_mut().lua.init(handle.clone())?;
-
-		let mut notify_source = calloop_notify::NotifySource::new()?;
-        notify_source.watch(Path::new("./test"), RecursiveMode::Recursive)?;
-		let handle_clone = handle.clone();
-        event_loop
-            .handle()
-            .insert_source(notify_source, move |event, _, state| {
-                if !event.kind.is_modify() {
-                    return;
-                }
-
-                let _ = state.lua.init(handle_clone.clone());
-            })?;
-
-		Ok(handle)
+        })
     }
 
-	pub fn wm(&self) -> Arc<Wm> {
-		self.lua.wm()
-	}
+    pub fn wm(&mut self) -> Rc<Wm> {
+        self.lua.wm.as_ref().unwrap().clone()
+    }
+}
+
+thread_local! {
+    static HAZEL: Cell<Option<*mut Hazel>> = const { Cell::new(None) };
+}
+
+pub struct GlobalHazel;
+
+impl GlobalHazel {
+    pub fn execute<R>(hazel: &mut Hazel, f: impl FnOnce(&mut Hazel) -> R) -> R {
+        let ptr = hazel as *mut Hazel;
+        HAZEL.with(|cell| cell.set(Some(ptr)));
+        struct Guard;
+        impl Drop for Guard {
+            fn drop(&mut self) {
+                HAZEL.with(|cell| cell.set(None));
+            }
+        }
+        let _guard = Guard;
+        f(hazel)
+    }
+
+    pub fn with<T, F>(f: F) -> Result<T, mlua::Error>
+    where
+        F: FnOnce(&mut Hazel) -> Result<T, mlua::Error>,
+    {
+        HAZEL.with(|cell| {
+            if let Some(ptr) = cell.get() {
+                let hazel = unsafe { &mut *ptr };
+                f(hazel)
+            } else {
+                eprintln!("GlobalHazel accessed outside of execute");
+                Err(mlua::Error::external(
+                    "GlobalHazel accessed outside of execute",
+                ))
+            }
+        })
+    }
 }

@@ -2,6 +2,8 @@ use std::{cell::RefCell, collections::HashMap};
 
 use mlua::{Function, IntoLuaMulti, RegistryKey, UserData};
 
+use crate::core::GlobalHazel;
+
 #[derive(Default)]
 pub struct LuaEventHandler {
     handlers: RefCell<HashMap<String, Vec<RegistryKey>>>,
@@ -31,7 +33,7 @@ impl LuaEventHandler {
         self.add(event_name, registry_key)
     }
 
-    pub fn emit<A: IntoLuaMulti + Clone>(
+    pub fn emit_with<A: IntoLuaMulti + Clone>(
         &self,
         lua: &mlua::Lua,
         event_name: String,
@@ -45,6 +47,16 @@ impl LuaEventHandler {
             }
         }
         Ok(())
+    }
+
+    pub fn emit<A: IntoLuaMulti + Clone>(
+        &self,
+        event_name: String,
+        args: A,
+    ) -> Result<(), mlua::Error> {
+		GlobalHazel::with(|hazel| {
+			self.emit_with(&hazel.lua.lua, event_name, args)
+		})
     }
 }
 

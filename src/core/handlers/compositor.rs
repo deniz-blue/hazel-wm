@@ -9,7 +9,7 @@ use smithay::{
 use crate::core::{Hazel, client_state::ClientState, handlers::xdg_shell};
 
 impl CompositorHandler for Hazel {
-    fn compositor_state(&mut self) -> &mut CompositorState {
+    fn compositor_state<'a>(&'a mut self) -> &'a mut CompositorState {
         &mut self.compositor.smithay.compositor_state
     }
 

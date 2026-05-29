@@ -1,19 +1,11 @@
 use smithay::{
-    desktop::{
-        PopupKind, PopupManager, Space, Window, find_popup_root_surface, get_popup_toplevel_coords,
+    desktop::{PopupKind, PopupManager, Space, Window},
+    input::{Seat, pointer::GrabStartData as PointerGrabStartData},
+    reexports::wayland_server::{
+        Resource,
+        protocol::{wl_seat, wl_surface::WlSurface},
     },
-    input::{
-        Seat,
-        pointer::{Focus, GrabStartData as PointerGrabStartData},
-    },
-    reexports::{
-        wayland_protocols::xdg::shell::server::xdg_toplevel,
-        wayland_server::{
-            Resource,
-            protocol::{wl_seat, wl_surface::WlSurface},
-        },
-    },
-    utils::{Rectangle, Serial},
+    utils::Serial,
     wayland::{
         compositor::with_states,
         shell::xdg::{
@@ -37,7 +29,11 @@ impl XdgShellHandler for Hazel {
 
     fn new_popup(&mut self, surface: PopupSurface, _positioner: PositionerState) {
         // self.compositor.unconstrain_popup(&surface);
-        let _ = self.compositor.smithay.popups.track_popup(PopupKind::Xdg(surface));
+        let _ = self
+            .compositor
+            .smithay
+            .popups
+            .track_popup(PopupKind::Xdg(surface));
     }
 
     fn reposition_request(

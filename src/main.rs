@@ -7,23 +7,31 @@ pub mod lua;
 use smithay::reexports::calloop::EventLoop;
 
 use crate::backend::Backend;
-use crate::core::Hazel;
+use crate::core::{GlobalHazel, Hazel, HazelEventLoop};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     init_logging();
 
-    let mut event_loop: EventLoop<Hazel> = EventLoop::try_new()?;
+    let mut event_loop: HazelEventLoop = EventLoop::try_new()?;
     let mut state = Hazel::new(&mut event_loop)?;
 
     let backend = Backend::new_winit();
-    backend.initialize(&mut state.borrow_mut(), &mut event_loop)?;
+    backend.initialize(&mut state, &mut event_loop)?;
+
+    GlobalHazel::execute(&mut state, |hazel| {
+        if let Err(e) = hazel.lua.init() {
+            eprintln!("Error initializing Lua: {e}");
+        } else {
+            println!("Initialized Lua");
+        }
+    });
 
     // Safety: single threaded
-    unsafe { std::env::set_var("WAYLAND_DISPLAY", &state.borrow().compositor.socket_name) };
+    unsafe { std::env::set_var("WAYLAND_DISPLAY", &state.compositor.socket_name) };
 
     spawn_client();
 
-    event_loop.run(None, &mut state.borrow_mut(), move |_| {
+    event_loop.run(None, &mut state, move |_| {
         //
     })?;
 

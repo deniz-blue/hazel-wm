@@ -2,21 +2,16 @@ use mlua::{Function, UserData};
 
 use crate::{
     impl_lua_event_handler,
-    lua::{
-        HazelHandle,
-        event_handler::{LuaEventHandler, LuaEventSource},
-    },
+    lua::event_handler::{LuaEventHandler, LuaEventSource},
 };
 
 pub struct WmInput {
-    pub hazel: HazelHandle,
     pub events: LuaEventHandler,
 }
 
 impl WmInput {
-    pub fn new(h: HazelHandle) -> Self {
+    pub fn new() -> Self {
         Self {
-            hazel: h,
             events: LuaEventHandler::new(),
         }
     }

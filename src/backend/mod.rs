@@ -9,11 +9,11 @@ use smithay::{
         winit::{self, WinitEvent},
     },
     output::{Mode, Output, PhysicalProperties, Subpixel},
-    reexports::{calloop::EventLoop, winit::window::WindowAttributes},
+    reexports::winit::window::WindowAttributes,
     utils::{Rectangle, Transform},
 };
 
-use crate::core::Hazel;
+use crate::core::{GlobalHazel, Hazel, HazelEventLoop};
 
 pub enum Backend {
     Winit {
@@ -32,7 +32,7 @@ impl Backend {
     pub fn initialize(
         self,
         state: &mut Hazel,
-        event_loop: &mut EventLoop<Hazel>,
+        event_loop: &mut HazelEventLoop,
     ) -> Result<(), Box<dyn std::error::Error>> {
         match self {
             Backend::Winit { mut backend, winit } => {
@@ -79,7 +79,7 @@ impl Backend {
                                 );
                             }
                             WinitEvent::Input(event) => {
-                                state.process_input(event);
+                                GlobalHazel::execute(state, |hazel| hazel.process_input(event));
                             }
                             WinitEvent::Redraw => {
                                 let size = backend.window_size();
@@ -110,7 +110,7 @@ impl Backend {
                                 state.compositor.space.elements().for_each(|window| {
                                     window.send_frame(
                                         &output,
-                                        state.compositor.start_time.elapsed(),
+                                        state.start_time.elapsed(),
                                         Some(Duration::ZERO),
                                         |_, _| Some(output.clone()),
                                     )

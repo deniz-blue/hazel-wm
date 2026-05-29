@@ -3,10 +3,7 @@ use std::{ffi::OsString, sync::Arc};
 use smithay::{
     desktop::{PopupManager, Space, Window, WindowSurfaceType},
     input::{Seat, SeatState},
-    reexports::{
-        calloop::{EventLoop, LoopSignal},
-        wayland_server::{DisplayHandle, protocol::wl_surface::WlSurface},
-    },
+    reexports::wayland_server::{DisplayHandle, protocol::wl_surface::WlSurface},
     utils::{Logical, Point},
     wayland::{
         compositor::CompositorState, output::OutputManagerState,
@@ -15,17 +12,12 @@ use smithay::{
     },
 };
 
-use crate::core::{Hazel, client_state::ClientState};
+use crate::core::{Hazel, HazelEventLoop, client_state::ClientState};
 
 pub struct HazelCompositor {
-    pub start_time: std::time::Instant,
     pub socket_name: OsString,
-
     pub space: Space<Window>,
-    pub loop_signal: LoopSignal,
-
     pub smithay: HazelSmithay,
-
     pub seat: Seat<Hazel>,
 }
 
@@ -40,9 +32,7 @@ pub struct HazelSmithay {
 }
 
 impl HazelCompositor {
-    pub fn new(event_loop: &mut EventLoop<Hazel>, dh: &DisplayHandle) -> Self {
-        let start_time = std::time::Instant::now();
-
+    pub fn new(event_loop: &mut HazelEventLoop, dh: &DisplayHandle) -> Self {
         let compositor_state = CompositorState::new::<Hazel>(&dh);
         let xdg_shell_state = XdgShellState::new::<Hazel>(&dh);
         let shm_state = ShmState::new::<Hazel>(&dh, vec![]);
@@ -63,13 +53,8 @@ impl HazelCompositor {
 
         let socket_name = Self::init_wayland_listener(event_loop);
 
-        let loop_signal = event_loop.get_signal();
-
         Self {
-            start_time,
-
             space,
-            loop_signal,
             socket_name,
 
             smithay: HazelSmithay {
@@ -86,7 +71,7 @@ impl HazelCompositor {
         }
     }
 
-    fn init_wayland_listener(event_loop: &mut EventLoop<Hazel>) -> OsString {
+    fn init_wayland_listener(event_loop: &mut HazelEventLoop) -> OsString {
         let listening_socket = ListeningSocketSource::new_auto().unwrap();
 
         let socket_name = listening_socket.socket_name().to_os_string();
