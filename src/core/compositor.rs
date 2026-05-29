@@ -80,6 +80,7 @@ impl HazelCompositor {
 
         loop_handle
             .insert_source(listening_socket, move |client_stream, _, state| {
+				println!("New client connection");
                 state
                     .display_handle
                     .insert_client(client_stream, Arc::new(ClientState::default()))

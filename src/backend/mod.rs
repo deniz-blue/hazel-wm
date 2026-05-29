@@ -79,7 +79,12 @@ impl Backend {
                                 );
                             }
                             WinitEvent::Input(event) => {
-                                GlobalHazel::execute(state, |hazel| hazel.process_input(event));
+                                if let Err(e) =
+                                    GlobalHazel::execute(state, |hazel| hazel.process_input(event))
+                                {
+                                    eprintln!("Error processing input event");
+                                    eprintln!("{e:?}");
+                                }
                             }
                             WinitEvent::Redraw => {
                                 let size = backend.window_size();

@@ -24,10 +24,15 @@ impl XdgShellHandler for Hazel {
 
     fn new_toplevel(&mut self, surface: ToplevelSurface) {
         let window = Window::new_wayland_window(surface);
+
+		println!("New toplevel: {:?}", window.toplevel().unwrap().wl_surface().id());
+
         self.compositor.space.map_element(window, (0, 0), false);
     }
 
     fn new_popup(&mut self, surface: PopupSurface, _positioner: PositionerState) {
+		println!("New popup: {:?}", surface.wl_surface().id());
+
         // self.compositor.unconstrain_popup(&surface);
         let _ = self
             .compositor
@@ -42,6 +47,7 @@ impl XdgShellHandler for Hazel {
         positioner: PositionerState,
         token: u32,
     ) {
+		println!("Reposition request for popup: {:?}", surface.wl_surface().id());
         surface.with_pending_state(|state| {
             let geometry = positioner.get_geometry();
             state.geometry = geometry;

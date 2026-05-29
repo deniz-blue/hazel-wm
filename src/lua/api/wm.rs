@@ -25,9 +25,8 @@ impl UserData for Wm {
     fn add_methods<M: mlua::prelude::LuaUserDataMethods<Self>>(methods: &mut M) {
         impl_lua_event_handler!(methods);
 
-        methods.add_method("doohickey", |_, _this, ()| {
-            println!("Doohickey():");
-            GlobalHazel::with(|hazel| Ok(hazel.doohickey()))
+        methods.add_method("quit", |_, _this, ()| {
+            GlobalHazel::with(|hazel| Ok(hazel.loop_signal.stop()))
         });
     }
 }

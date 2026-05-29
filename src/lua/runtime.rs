@@ -1,7 +1,7 @@
-use std::{path::Path, rc::Rc};
+use std::{path::Path, process::Stdio, rc::Rc};
 
 use calloop_notify::notify::{RecursiveMode, Watcher};
-use mlua::Lua;
+use mlua::{IntoLua, Lua};
 
 use crate::{
     core::{GlobalHazel, HazelEventLoop},
@@ -27,6 +27,37 @@ impl HazelLua {
 
         let globals = self.lua.globals();
         globals.set("wm", self.wm.clone())?;
+
+        globals.set(
+            "spawn",
+            self.lua
+                .create_function(|_, (cmd, args): (String, Option<Vec<String>>)| {
+                    std::process::Command::new(cmd)
+                        .args(args.unwrap_or_default())
+						.stdout(Stdio::null())
+						.stderr(Stdio::null())
+						.stdin(Stdio::null())
+                        .spawn()
+                        .map_err(|e| mlua::Error::external(e))?;
+                    Ok(())
+                })?,
+        )?;
+
+        globals.set(
+            "exec",
+            self.lua
+                .create_function(|lua, (cmd, args): (String, Option<Vec<String>>)| {
+                    let output = std::process::Command::new(cmd)
+                        .args(args.unwrap_or_default())
+						.output()
+                        .map_err(|e| mlua::Error::external(e))?;
+                    Ok(lua.create_table_from([
+                        ("stdout", output.stdout.into_iter().map(|b| b as char).collect::<String>().into_lua(lua)?),
+                        ("stderr", output.stderr.into_iter().map(|b| b as char).collect::<String>().into_lua(lua)?),
+                        ("status", output.status.code().into_lua(lua)?),
+                    ]))
+                })?,
+        )?;
 
         self.lua
             .load(r#"package.path = package.path .. ";./test/?.lua""#)

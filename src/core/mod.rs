@@ -39,6 +39,7 @@ impl Hazel {
             |_, display, state| {
                 GlobalHazel::execute(state, |hazel| {
                     // Safety: we don't drop the display
+					println!("Dispatching clients");
                     unsafe { display.get_mut().dispatch_clients(hazel) }
                 })?;
 
