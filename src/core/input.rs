@@ -1,12 +1,9 @@
 use std::{cell::RefCell, rc::Rc};
 
 use smithay::{
-    backend::{
-        input::{
-            AbsolutePositionEvent, ButtonState, Event, InputEvent, KeyboardKeyEvent,
-            PointerButtonEvent,
-        },
-        winit::WinitInput,
+    backend::input::{
+        AbsolutePositionEvent, ButtonState, Event, InputBackend, InputEvent, KeyboardKeyEvent,
+        PointerButtonEvent,
     },
     input::{
         keyboard::FilterResult,
@@ -15,12 +12,12 @@ use smithay::{
     utils::SERIAL_COUNTER,
 };
 
-use crate::{core::Hazel, lua::api::events::KeyboardEvent};
+use crate::{core::Hazel, lua::api::wm_input::KeyboardEvent};
 
 impl Hazel {
-    pub fn process_input(
+    pub fn process_input<B: InputBackend>(
         &mut self,
-        event: InputEvent<WinitInput>,
+        event: InputEvent<B>,
     ) -> Result<(), Box<dyn std::error::Error>> {
         self.wm().input.events.emit("event".to_owned(), ())?;
 

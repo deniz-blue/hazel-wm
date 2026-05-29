@@ -25,6 +25,5 @@ wm.outputs:on("added", function(e)
 	end
 end)
 
-print("pos before " .. wm.outputs.winit.position.x .. ", " .. wm.outputs.winit.position.y)
-wm.outputs.winit:move({ x = -200, y = -200 })
+-- wm.outputs.winit:move({ x = -200, y = -200 })
 

@@ -1,7 +1,6 @@
 use mlua::{FromLua, IntoLua, UserData};
 use smithay::utils::{Coordinate, Point, Size};
 
-pub mod events;
 pub mod wm;
 pub mod wm_input;
 pub mod wm_outputs;
