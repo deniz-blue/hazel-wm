@@ -39,13 +39,14 @@ impl Hazel {
             |_, display, state| {
                 GlobalHazel::execute(state, |hazel| {
                     // Safety: we don't drop the display
-					println!("Dispatching clients");
                     unsafe { display.get_mut().dispatch_clients(hazel) }
                 })?;
 
                 Ok(PostAction::Continue)
             },
         )?;
+
+        lua.listen(event_loop)?;
 
         Ok(Self {
             start_time,

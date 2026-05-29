@@ -23,10 +23,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     GlobalHazel::execute(&mut state, |hazel| {
         if let Err(e) = hazel.lua.init() {
-            eprintln!("Error initializing Lua: {e}");
-        } else {
-            println!("Initialized Lua");
+            return eprintln!("Error initializing Lua: {e}");
         }
+
+		hazel.wm().events.emit("ready".to_owned(), ()).expect("Failed to emit ready event");
+
+        println!("Initialized Lua");
     });
 
     event_loop.run(None, &mut state, move |_| {

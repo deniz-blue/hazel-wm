@@ -33,12 +33,13 @@ impl LuaEventHandler {
         self.add(event_name, registry_key)
     }
 
-    pub fn emit_with<A: IntoLuaMulti + Clone>(
+    pub fn emit_with<A: IntoLuaMulti>(
         &self,
         lua: &mlua::Lua,
         event_name: String,
         args: A,
     ) -> Result<(), mlua::Error> {
+		let args = args.into_lua_multi(lua)?;
         if let Some(handlers) = self.handlers.borrow_mut().get(&event_name) {
             for handler in handlers {
                 if let Ok(handler_fn) = lua.registry_value::<Function>(handler) {
@@ -49,7 +50,7 @@ impl LuaEventHandler {
         Ok(())
     }
 
-    pub fn emit<A: IntoLuaMulti + Clone>(
+    pub fn emit<A: IntoLuaMulti>(
         &self,
         event_name: String,
         args: A,

@@ -1,3 +1,5 @@
+use std::{cell::RefCell, rc::Rc};
+
 use smithay::{
     backend::{
         input::{
@@ -13,7 +15,7 @@ use smithay::{
     utils::SERIAL_COUNTER,
 };
 
-use crate::core::Hazel;
+use crate::{core::Hazel, lua::api::events::KeyboardEvent};
 
 impl Hazel {
     pub fn process_input(
@@ -24,17 +26,44 @@ impl Hazel {
 
         match event {
             InputEvent::Keyboard { event } => {
-                let serial = SERIAL_COUNTER.next_serial();
-                let time = event.time_msec();
                 let keycode = event.key_code();
                 let state = event.state();
-
-				println!("Keyboard event: keycode={}, state={:?}", keycode.raw(), state);
+                let serial = SERIAL_COUNTER.next_serial();
+                let time = event.time_msec();
 
                 let keyboard = self.compositor.seat.get_keyboard().unwrap();
-                keyboard.input::<(), _>(self, keycode, state, serial, time, |_, _, _| {
-                    FilterResult::Forward
-                });
+                keyboard.input::<(), _>(
+                    self,
+                    keycode,
+                    state,
+                    serial,
+                    time,
+                    move |hazel, modifiers, kh| {
+                        let event = Rc::new(KeyboardEvent {
+                            keycode,
+                            keysyms: kh.modified_syms(),
+                            modifiers: modifiers.clone(),
+                            state,
+                            serial,
+                            time,
+                            default_prevented: RefCell::new(false),
+                        });
+
+                        hazel
+                            .wm()
+                            .input
+                            .events
+                            .emit("keyboard".to_owned(), event.clone())
+                            .expect("Oops");
+
+                        if event.default_prevented.take() {
+                            println!("Default prevented for key event: {:?}", event.keycode);
+                            FilterResult::Intercept(())
+                        } else {
+                            FilterResult::Forward
+                        }
+                    },
+                );
             }
 
             InputEvent::PointerMotionAbsolute { event } => {
