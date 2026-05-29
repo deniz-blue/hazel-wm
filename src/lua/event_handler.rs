@@ -76,11 +76,23 @@ impl UserData for LuaEventHandler {
 }
 
 #[macro_export]
+macro_rules! impl_lua_event_source {
+	($t:ident) => {
+		impl crate::lua::event_handler::LuaEventSource for $t {
+			fn events(&self) -> &crate::lua::event_handler::LuaEventHandler {
+				&self.events
+			}
+		}
+	};
+}
+
+#[macro_export]
 macro_rules! impl_lua_event_handler {
     ($methods:ident) => {
         $methods.add_method(
             "on",
-            |lua: &mlua::Lua, this, (event_name, handler): (String, Function)| {
+            |lua: &mlua::Lua, this, (event_name, handler): (String, mlua::Function)| {
+				use crate::lua::event_handler::LuaEventSource;
                 this.events().add_function(lua, event_name, handler)
             },
         );

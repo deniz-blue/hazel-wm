@@ -10,20 +10,20 @@ use crate::{
 
 pub struct HazelLua {
     pub lua: Lua,
-    pub wm: Option<Rc<Wm>>,
+    pub wm: Rc<Wm>,
 }
 
 impl HazelLua {
     pub fn new_uninit() -> Self {
         Self {
             lua: Lua::new(),
-            wm: None,
+            wm: Default::default(),
         }
     }
 
     pub fn init(&mut self) -> Result<(), mlua::Error> {
         self.lua = Lua::new();
-        self.wm = Some(Rc::new(Wm::new()));
+        self.wm = Default::default();
 
         let globals = self.lua.globals();
         globals.set("wm", self.wm.clone())?;

@@ -551,6 +551,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ed5909b6e89a2db4456e54cd5f673791d7eca6732202bbf2a9cc504fe2f9b84a"
 
 [[package]]
+name = "hazel"
+version = "0.1.0"
+dependencies = [
+ "bitflags 2.11.1",
+ "calloop-notify",
+ "mlua",
+ "mlua-pkg",
+ "smithay",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "heck"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1687,18 +1699,6 @@ name = "smallvec"
 version = "1.15.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "67b1b7a3b5fe4f1376887184045fcf45c69e92af734b7aaddc05fb777b6fbd03"
-
-[[package]]
-name = "smallvil"
-version = "0.1.0"
-dependencies = [
- "bitflags 2.11.1",
- "calloop-notify",
- "mlua",
- "mlua-pkg",
- "smithay",
- "tracing-subscriber",
-]
 
 [[package]]
 name = "smithay"

@@ -1,20 +1,20 @@
 use std::rc::Rc;
 
-use mlua::{Error, UserData};
+use mlua::UserData;
 
-use crate::{core::GlobalHazel, lua::api::wm_input::WmInput};
+use crate::{
+    core::GlobalHazel,
+    impl_lua_event_handler, impl_lua_event_source,
+    lua::{api::wm_input::WmInput, event_handler::LuaEventHandler},
+};
 
+#[derive(Default)]
 pub struct Wm {
+    pub events: LuaEventHandler,
     pub input: Rc<WmInput>,
 }
 
-impl Wm {
-    pub fn new() -> Self {
-        Self {
-            input: Rc::new(WmInput::new()),
-        }
-    }
-}
+impl_lua_event_source!(Wm);
 
 impl UserData for Wm {
     fn add_fields<F: mlua::prelude::LuaUserDataFields<Self>>(fields: &mut F) {
@@ -23,6 +23,8 @@ impl UserData for Wm {
     }
 
     fn add_methods<M: mlua::prelude::LuaUserDataMethods<Self>>(methods: &mut M) {
+        impl_lua_event_handler!(methods);
+
         methods.add_method("doohickey", |_, _this, ()| {
             println!("Doohickey():");
             GlobalHazel::with(|hazel| Ok(hazel.doohickey()))

@@ -37,10 +37,11 @@ impl Hazel {
         event_loop.handle().insert_source(
             Generic::new(display, Interest::READ, Mode::Level),
             |_, display, state| {
-                // Safety: we don't drop the display
-                unsafe {
-                    display.get_mut().dispatch_clients(state).unwrap();
-                }
+                GlobalHazel::execute(state, |hazel| {
+                    // Safety: we don't drop the display
+                    unsafe { display.get_mut().dispatch_clients(hazel) }
+                })?;
+
                 Ok(PostAction::Continue)
             },
         )?;
@@ -55,7 +56,7 @@ impl Hazel {
     }
 
     pub fn wm(&mut self) -> Rc<Wm> {
-        self.lua.wm.as_ref().unwrap().clone()
+        self.lua.wm.clone()
     }
 }
 

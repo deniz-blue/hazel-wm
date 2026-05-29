@@ -1,6 +1,6 @@
 use smithay::{
     backend::renderer::utils::on_commit_buffer_handler,
-    reexports::wayland_server::{Client, protocol::wl_surface::WlSurface},
+    reexports::wayland_server::{Client, Resource, protocol::wl_surface::WlSurface},
     wayland::compositor::{
         CompositorClientState, CompositorHandler, CompositorState, get_parent, is_sync_subsurface,
     },
@@ -36,6 +36,8 @@ impl CompositorHandler for Hazel {
 
         xdg_shell::handle_commit(&mut self.compositor.smithay.popups, &self.compositor.space, surface);
         // resize_grab::handle_commit(&mut self.compositor.space, surface);
+
+		self.wm().events.emit("commit".to_string(), surface.id().protocol_id()).unwrap();
     }
 }
 
