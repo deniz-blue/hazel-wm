@@ -5,11 +5,26 @@ wm:on("ready", function()
 	spawn("alacritty")
 end)
 
+---@param e KeyboardEvent
 wm.input:on("keyboard", function(e)
 	print("KEY EVENT: " .. e.keycode)
 
-	if e.keycode == 24 then
-		print("You pressed 'q'!")
+	-- Alt + T
+	if e.modifiers.alt and e.keycode == 28 then
+		print("Alt + T pressed")
+		spawn("alacritty")
 		e:prevent_default()
 	end
 end)
+
+wm.outputs:on("added", function(e)
+	print("Output added " .. #wm.outputs)
+
+	for k, v in pairs(wm.outputs) do
+		print(k)
+	end
+end)
+
+print("pos before " .. wm.outputs.winit.position.x .. ", " .. wm.outputs.winit.position.y)
+wm.outputs.winit:move({ x = -200, y = -200 })
+

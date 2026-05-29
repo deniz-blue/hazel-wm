@@ -130,8 +130,4 @@ impl Hazel {
 
         Ok(())
     }
-
-    pub fn doohickey(&mut self) {
-        println!("Doohickey called!!!!!!!!");
-    }
 }

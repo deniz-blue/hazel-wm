@@ -5,13 +5,18 @@ use mlua::UserData;
 use crate::{
     core::GlobalHazel,
     impl_lua_event_handler, impl_lua_event_source,
-    lua::{api::wm_input::WmInput, event_handler::LuaEventHandler},
+    lua::{
+        api::{wm_input::WmInput, wm_outputs::WmOutputs, wm_windows::WmWindows},
+        event_handler::LuaEventHandler,
+    },
 };
 
 #[derive(Default)]
 pub struct Wm {
     pub events: LuaEventHandler,
     pub input: Rc<WmInput>,
+    pub windows: Rc<WmWindows>,
+    pub outputs: Rc<WmOutputs>,
 }
 
 impl_lua_event_source!(Wm);
@@ -20,6 +25,8 @@ impl UserData for Wm {
     fn add_fields<F: mlua::prelude::LuaUserDataFields<Self>>(fields: &mut F) {
         fields.add_field_method_get("name", |_, _| Ok("Hazel"));
         fields.add_field_method_get("input", |_, this| Ok(this.input.clone()));
+        fields.add_field_method_get("windows", |_, this| Ok(this.windows.clone()));
+        fields.add_field_method_get("outputs", |_, this| Ok(this.outputs.clone()));
     }
 
     fn add_methods<M: mlua::prelude::LuaUserDataMethods<Self>>(methods: &mut M) {

@@ -14,6 +14,7 @@ pub mod client_state;
 pub mod compositor;
 pub mod handlers;
 pub mod input;
+pub mod outputs;
 
 pub struct Hazel {
     pub start_time: Instant,
@@ -57,7 +58,7 @@ impl Hazel {
         })
     }
 
-    pub fn wm(&mut self) -> Rc<Wm> {
+    pub fn wm(&self) -> Rc<Wm> {
         self.lua.wm.clone()
     }
 }

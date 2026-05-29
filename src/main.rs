@@ -26,7 +26,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             return eprintln!("Error initializing Lua: {e}");
         }
 
-		hazel.wm().events.emit("ready".to_owned(), ()).expect("Failed to emit ready event");
+        hazel
+            .wm()
+            .events
+            .emit("ready".to_owned(), ())
+            .expect("Failed to emit ready event");
+
+        let outputs = hazel.compositor.space.outputs();
+        for _output in outputs {
+            hazel
+                .wm()
+                .outputs
+                .events
+                .emit("added".to_owned(), Option::<bool>::None)
+                .expect("Failed to emit output added event");
+        }
 
         println!("Initialized Lua");
     });
