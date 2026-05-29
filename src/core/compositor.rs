@@ -2,7 +2,7 @@ use std::{ffi::OsString, sync::Arc};
 
 use smithay::{
     desktop::{PopupManager, Space, Window, WindowSurfaceType},
-    input::{Seat, SeatState},
+    input::{Seat, SeatState, keyboard::XkbConfig},
     reexports::wayland_server::{DisplayHandle, protocol::wl_surface::WlSurface},
     utils::{Logical, Point},
     wayland::{
@@ -43,10 +43,18 @@ impl HazelCompositor {
         let data_device_state = DataDeviceState::new::<Hazel>(&dh);
 
         let mut seat_state = SeatState::new();
-        let mut seat: Seat<Hazel> = seat_state.new_seat("meow");
+        let mut seat = seat_state.new_wl_seat(&dh, "meow");
 
         // ! Hack
-        seat.add_keyboard(Default::default(), 200, 25).unwrap();
+        seat.add_keyboard(
+            XkbConfig {
+                layout: "us",
+                ..Default::default()
+            },
+            200,
+            25,
+        )
+        .unwrap();
         seat.add_pointer();
 
         let space = Space::default();
