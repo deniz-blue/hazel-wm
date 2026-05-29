@@ -1,11 +1,15 @@
 print("Meowing on " .. wm.name)
 
-spawn("alacritty")
+wm:on("ready", function()
+	print("WM is ready!")
+	spawn("alacritty")
+end)
 
--- wm.input:on("event", function (data)
--- 	wm:doohickey()
--- end)
+wm.input:on("keyboard", function(e)
+	print("KEY EVENT: " .. e.keycode)
 
-wm:on("commit", function ()
-	print("COMMIT EVENT")
+	if e.keycode == 24 then
+		print("You pressed 'q'!")
+		e:prevent_default()
+	end
 end)
