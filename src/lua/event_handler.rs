@@ -39,25 +39,25 @@ impl LuaEventHandler {
         event_name: String,
         args: A,
     ) -> Result<(), mlua::Error> {
-		let args = args.into_lua_multi(lua)?;
+        let args = args.into_lua_multi(lua)?;
         if let Some(handlers) = self.handlers.borrow_mut().get(&event_name) {
             for handler in handlers {
                 if let Ok(handler_fn) = lua.registry_value::<Function>(handler) {
-                    let _ = handler_fn.call::<mlua::Value>(args.clone());
+                    if let Err(e) = handler_fn.call::<mlua::Value>(args.clone()) {
+                        eprintln!(
+                            "Error occurred while calling event handler for event: {}",
+                            event_name
+                        );
+						eprintln!("Error details: {}", e);
+                    }
                 }
             }
         }
         Ok(())
     }
 
-    pub fn emit<A: IntoLuaMulti>(
-        &self,
-        event_name: String,
-        args: A,
-    ) -> Result<(), mlua::Error> {
-		GlobalHazel::with(|hazel| {
-			self.emit_with(&hazel.lua.lua, event_name, args)
-		})
+    pub fn emit<A: IntoLuaMulti>(&self, event_name: String, args: A) -> Result<(), mlua::Error> {
+        GlobalHazel::with(|hazel| self.emit_with(&hazel.lua.lua, event_name, args))
     }
 }
 
@@ -78,13 +78,13 @@ impl UserData for LuaEventHandler {
 
 #[macro_export]
 macro_rules! impl_lua_event_source {
-	($t:ident) => {
-		impl crate::lua::event_handler::LuaEventSource for $t {
-			fn events(&self) -> &crate::lua::event_handler::LuaEventHandler {
-				&self.events
-			}
-		}
-	};
+    ($t:ident) => {
+        impl crate::lua::event_handler::LuaEventSource for $t {
+            fn events(&self) -> &crate::lua::event_handler::LuaEventHandler {
+                &self.events
+            }
+        }
+    };
 }
 
 #[macro_export]
@@ -93,7 +93,7 @@ macro_rules! impl_lua_event_handler {
         $methods.add_method(
             "on",
             |lua: &mlua::Lua, this, (event_name, handler): (String, mlua::Function)| {
-				use crate::lua::event_handler::LuaEventSource;
+                use crate::lua::event_handler::LuaEventSource;
                 this.events().add_function(lua, event_name, handler)
             },
         );

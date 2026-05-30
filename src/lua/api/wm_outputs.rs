@@ -7,7 +7,7 @@ use crate::{
     core::GlobalHazel,
     impl_lua_event_handler, impl_lua_event_source,
     lua::{
-        api::{LuaPoint, LuaSize},
+        api::utils::{LuaPoint, LuaSize},
         event_handler::LuaEventHandler,
     },
 };
@@ -23,17 +23,17 @@ impl UserData for WmOutputs {
     fn add_methods<M: mlua::prelude::LuaUserDataMethods<Self>>(methods: &mut M) {
         impl_lua_event_handler!(methods);
 
-        methods.add_meta_method(MetaMethod::Len, |_, _, _: ()| {
+        methods.add_method("count", |_, _, _: ()| {
             GlobalHazel::with(|hazel| Ok(hazel.compositor.space.outputs().count()))
         });
 
-        methods.add_meta_method(MetaMethod::Index, |_, _, key: String| {
+        methods.add_method("name", |_, _, name: String| {
             GlobalHazel::with(|hazel| {
                 let output = hazel
                     .compositor
                     .space
                     .outputs()
-                    .find(|output| output.name() == key)
+                    .find(|output| output.name() == name)
                     .map(|output| WmOutputHandle(output.downgrade()));
 
                 Ok(output)
@@ -89,9 +89,6 @@ impl UserData for WmOutputHandle {
                 .upgrade()
                 .map(|o| o.current_mode().map(LuaOutputMode)))
         });
-        fields.add_field_method_get("position", |_, this| {
-            Ok(this.0.upgrade().map(|o| LuaPoint(o.current_location())))
-        });
         fields.add_field_method_get("properties", |lua, this| {
             this.0
                 .upgrade()
@@ -113,7 +110,10 @@ impl UserData for WmOutputHandle {
     }
 
     fn add_methods<M: mlua::prelude::LuaUserDataMethods<Self>>(methods: &mut M) {
-        methods.add_method("move", |_, this, point: LuaPoint<i32, _>| {
+        methods.add_method("position", |_, this, _: ()| {
+            Ok(this.0.upgrade().map(|o| LuaPoint(o.current_location())))
+        });
+        methods.add_method("set_position", |_, this, point: LuaPoint<i32, _>| {
             if let Some(output) = this.0.upgrade() {
                 output.change_current_state(None, None, None, Some(point.0));
                 GlobalHazel::with(|hazel| {

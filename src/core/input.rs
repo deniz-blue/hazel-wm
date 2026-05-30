@@ -12,7 +12,13 @@ use smithay::{
     utils::SERIAL_COUNTER,
 };
 
-use crate::{core::Hazel, lua::api::wm_input::KeyboardEvent};
+use crate::{
+    core::Hazel,
+    lua::api::{
+        wm_input_keyboard::KeyboardEvent,
+        wm_input_pointer::{LuaPointerButtonEvent, LuaPointerMotionEvent},
+    },
+};
 
 impl Hazel {
     pub fn process_input<B: InputBackend>(
@@ -72,14 +78,25 @@ impl Hazel {
                 let location = event.position_transformed(geo.size) + geo.loc.to_f64();
                 let under = self.compositor.surface_under(location);
 
-                let event = MotionEvent {
-                    serial: SERIAL_COUNTER.next_serial(),
-                    time: event.time_msec(),
-                    location,
+                let event = LuaPointerMotionEvent {
+                    event: MotionEvent {
+                        serial: SERIAL_COUNTER.next_serial(),
+                        time: event.time_msec(),
+                        location,
+                    },
+                    default_prevented: RefCell::new(false),
                 };
 
-                pointer.motion(self, under, &event);
-                pointer.frame(self);
+                self.wm()
+                    .input
+                    .events
+                    .emit(LuaPointerMotionEvent::name(), event.clone())
+                    .expect("Failed to emit pointer move event");
+
+                if !event.default_prevented.into_inner() {
+                    pointer.motion(self, under, &event.event);
+                    pointer.frame(self);
+                }
             }
 
             InputEvent::PointerButton { event } => {
@@ -90,8 +107,23 @@ impl Hazel {
                     time: event.time_msec(),
                 };
 
+                if event.state == ButtonState::Pressed {
+                    self.pointer_pressed.push(event.button);
+                } else {
+                    self.pointer_pressed.retain(|&b| b != event.button);
+                }
+
                 let keyboard = self.compositor.seat.get_keyboard().unwrap();
                 let pointer = self.compositor.seat.get_pointer().unwrap();
+
+                self.wm()
+                    .input
+                    .events
+                    .emit(
+                        LuaPointerButtonEvent::name(),
+                        LuaPointerButtonEvent(event.clone()),
+                    )
+                    .expect("Failed to emit pointer button event");
 
                 if ButtonState::Pressed == event.state && !pointer.is_grabbed() {
                     if let Some((window, _)) = self
@@ -106,13 +138,9 @@ impl Hazel {
                             Some(window.toplevel().unwrap().wl_surface().clone()),
                             event.serial,
                         );
-                        self.compositor.space.elements().for_each(|window| {
-                            window.toplevel().unwrap().send_pending_configure();
-                        });
                     } else {
                         self.compositor.space.elements().for_each(|window| {
                             window.set_activated(false);
-                            window.toplevel().unwrap().send_pending_configure();
                         });
                         keyboard.set_focus(self, None, event.serial);
                     }

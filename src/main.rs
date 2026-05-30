@@ -45,8 +45,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("Initialized Lua");
     });
 
-    event_loop.run(None, &mut state, move |_| {
-        // println!("Event loop iteration");
+    event_loop.run(None, &mut state, move |hazel| {
+        hazel.compositor.space.elements().for_each(|window| {
+            window.toplevel().unwrap().send_pending_configure();
+        });
     })?;
 
     Ok(())

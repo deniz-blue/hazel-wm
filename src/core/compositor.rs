@@ -51,15 +51,7 @@ impl HazelCompositor {
         let mut seat = seat_state.new_wl_seat(&dh, "meow");
 
         // ! Hack
-        seat.add_keyboard(
-            XkbConfig {
-                layout: "us",
-                ..Default::default()
-            },
-            200,
-            25,
-        )
-        .unwrap();
+        seat.add_keyboard(XkbConfig::default(), 200, 25).unwrap();
         seat.add_pointer();
 
         let space = Space::default();

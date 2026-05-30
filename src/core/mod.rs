@@ -22,6 +22,7 @@ pub struct Hazel {
     pub loop_signal: LoopSignal,
     pub compositor: HazelCompositor,
     pub lua: HazelLua,
+	pub pointer_pressed: Vec<u32>,
 }
 
 pub type HazelEventLoop<'a> = EventLoop<'a, Hazel>;
@@ -55,6 +56,7 @@ impl Hazel {
             loop_signal,
             compositor,
             lua,
+            pointer_pressed: Vec::new(),
         })
     }
 
