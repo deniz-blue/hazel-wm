@@ -6,11 +6,16 @@ use smithay::{
     reexports::wayland_server::{DisplayHandle, protocol::wl_surface::WlSurface},
     utils::{Logical, Point},
     wayland::{
-        compositor::CompositorState, output::OutputManagerState,
-        selection::data_device::DataDeviceState, shell::xdg::XdgShellState, shm::ShmState,
+        compositor::CompositorState,
+        output::OutputManagerState,
+        selection::data_device::DataDeviceState,
+        shell::{kde::decoration::KdeDecorationState, xdg::XdgShellState},
+        shm::ShmState,
         socket::ListeningSocketSource,
     },
 };
+
+use smithay::reexports::wayland_protocols_misc::server_decoration::server::org_kde_kwin_server_decoration_manager::Mode;
 
 use crate::core::{Hazel, HazelEventLoop, client_state::ClientState};
 
@@ -29,6 +34,7 @@ pub struct HazelSmithay {
     pub seat_state: SeatState<Hazel>,
     pub data_device_state: DataDeviceState,
     pub popups: PopupManager,
+    pub kde_decoration_state: KdeDecorationState,
 }
 
 impl HazelCompositor {
@@ -37,9 +43,8 @@ impl HazelCompositor {
         let xdg_shell_state = XdgShellState::new::<Hazel>(&dh);
         let shm_state = ShmState::new::<Hazel>(&dh, vec![]);
         let popups = PopupManager::default();
-
+        let kde_decoration_state = KdeDecorationState::new::<Hazel>(&dh, Mode::Client);
         let output_manager_state = OutputManagerState::new_with_xdg_output::<Hazel>(&dh);
-
         let data_device_state = DataDeviceState::new::<Hazel>(&dh);
 
         let mut seat_state = SeatState::new();
@@ -73,6 +78,7 @@ impl HazelCompositor {
                 seat_state,
                 data_device_state,
                 popups,
+                kde_decoration_state,
             },
 
             seat,
@@ -88,7 +94,7 @@ impl HazelCompositor {
 
         loop_handle
             .insert_source(listening_socket, move |client_stream, _, state| {
-				println!("New client connection");
+                println!("New client connection");
                 state
                     .display_handle
                     .insert_client(client_stream, Arc::new(ClientState::default()))

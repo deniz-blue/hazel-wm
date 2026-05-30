@@ -6,3 +6,4 @@ pub mod seat;
 pub mod selection;
 pub mod shm;
 pub mod xdg_shell;
+pub mod kde;
