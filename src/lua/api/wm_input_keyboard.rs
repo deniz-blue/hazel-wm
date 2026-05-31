@@ -7,7 +7,10 @@ use smithay::{
     utils::Serial,
 };
 
-use crate::core::{GlobalHazel, Hazel};
+use crate::{
+    core::{GlobalHazel, Hazel},
+    lua::api::wm_input_keysym::LuaKeysym,
+};
 
 pub struct WmInputKeyboard(pub KeyboardHandle<Hazel>);
 
@@ -45,6 +48,7 @@ impl UserData for WmInputKeyboard {
 #[derive(Clone, Debug)]
 pub struct KeyboardEvent {
     pub keycode: Keycode,
+    pub keysym: Keysym,
     pub keysyms: Vec<Keysym>,
     pub modifiers: ModifiersState,
     pub state: KeyState,
@@ -54,17 +58,17 @@ pub struct KeyboardEvent {
 }
 
 impl KeyboardEvent {
-	pub fn name() -> String {
-		"key".to_owned()
-	}
+    pub fn name() -> String {
+        String::from("key")
+    }
 
-	pub fn prevent_default(&self) {
-		self.default_prevented.replace(true);
-	}
+    pub fn prevent_default(&self) {
+        self.default_prevented.replace(true);
+    }
 
-	pub fn is_default_prevented(&self) -> bool {
-		self.default_prevented.borrow().clone()
-	}
+    pub fn is_default_prevented(&self) -> bool {
+        self.default_prevented.borrow().clone()
+    }
 }
 
 impl UserData for KeyboardEvent {
@@ -73,9 +77,13 @@ impl UserData for KeyboardEvent {
         fields.add_field_method_get("serial", |_, this| Ok(Into::<u32>::into(this.serial)));
         fields.add_field_method_get("time", |_, this| Ok(this.time));
         fields.add_field_method_get("keycode", |_, this| Ok(this.keycode.raw()));
-        fields.add_field_method_get("keysyms", |_, this| {
-            let keysyms: Vec<_> = this.keysyms.iter().map(|ks| ks.raw()).collect();
-            Ok(keysyms)
+        fields.add_field_method_get("key", |_, this| Ok(LuaKeysym(this.keysym)));
+        fields.add_field_method_get("keys", |_, this| {
+            Ok(this
+                .keysyms
+                .iter()
+                .map(|ks| LuaKeysym(*ks))
+                .collect::<Vec<_>>())
         });
         fields.add_field_method_get("modifiers", |_, this| {
             Ok(ModifiersStateUserData(this.modifiers.clone()))

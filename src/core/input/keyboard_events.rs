@@ -25,6 +25,7 @@ impl Hazel {
             move |hazel, modifiers, kh| {
                 let event = KeyboardEvent {
                     keycode,
+                    keysym: kh.modified_sym(),
                     keysyms: kh.modified_syms(),
                     modifiers: modifiers.clone(),
                     state,

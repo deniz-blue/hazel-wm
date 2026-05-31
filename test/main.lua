@@ -8,17 +8,17 @@ wm:on("ready", function()
 end)
 
 wm.input:on("key", function(e)
-	print("KEY EVENT: " .. e.keycode)
+	print("KEY EVENT: " .. e.key)
 
 	-- Alt + T
-	if e.modifiers.alt and e.keycode == 28 then
+	if e.modifiers.alt and e.key == Key.T then
 		print("Alt + T pressed")
 		spawn("alacritty")
 		e:prevent_default()
 	end
 
 	-- Alt + R
-	if e.modifiers.alt and e.keycode == 27 then
+	if e.modifiers.alt and e.key == Key.R then
 		wm.outputs:name("winit"):set_position({ x = 0, y = 0 })
 		e:prevent_default()
 	end

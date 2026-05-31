@@ -40,6 +40,9 @@ function input:on(event, callback) end
 ---@param callback fun(e: KeyboardEvent)
 function input:on(event, callback) end
 
+---@class Keysym
+local Keysym = {}
+
 ---@alias ModifierState { alt: boolean, ctrl: boolean, shift: boolean, logo: boolean }
 
 ---@class KeyboardEvent
@@ -47,7 +50,8 @@ function input:on(event, callback) end
 ---@field modifiers ModifierState
 ---@field state "Pressed" | "Released"
 ---@field time integer
----@field keysyms integer[]
+---@field key Keysym
+---@field keys Keysym[]
 local KeyboardEvent = {}
 
 --- Prevent sending to window/client
