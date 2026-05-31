@@ -1,17 +1,24 @@
+use miette::Result;
 use smithay::{
     backend::input::{
-        AbsolutePositionEvent, Axis, AxisRelativeDirection, Device, Event, InputBackend,
-        PointerAxisEvent, PointerButtonEvent, PointerMotionEvent,
+        AbsolutePositionEvent, Axis, AxisRelativeDirection, ButtonState, Device, Event,
+        InputBackend, PointerAxisEvent, PointerButtonEvent, PointerMotionEvent,
     },
     desktop::WindowSurfaceType,
     input::pointer::{AxisFrame, ButtonEvent, MotionEvent, RelativeMotionEvent},
     utils::SERIAL_COUNTER,
 };
 
-use crate::core::{Hazel, input::pointer::PointerAbsoluteMapping};
+use crate::{
+    core::{Hazel, input::pointer::PointerAbsoluteMapping},
+    lua::{api::wm_input_pointer::LuaPointerButtonEvent, ext::LuaErrorExt},
+};
 
 impl Hazel {
-    pub fn on_pointer_button<B: InputBackend>(&mut self, event: B::PointerButtonEvent) {
+    pub fn on_pointer_button<B: InputBackend>(
+        &mut self,
+        event: B::PointerButtonEvent,
+    ) -> Result<()> {
         let device_id = event.device().id();
         let button = event.button_code();
         let state = event.state();
@@ -21,7 +28,6 @@ impl Hazel {
         let (seat, pointer) = self.compositor.get_pointer_handle(&device_id).unwrap();
 
         if let Some((window, p)) = self.compositor.window_under(pointer.current_location()) {
-            // window.set_activated(true);
             let surface = window.surface_under(p.to_f64(), WindowSurfaceType::all());
             if let (Some((surface, _)), Some(keyboard)) = (surface, seat.get_keyboard()) {
                 keyboard.set_focus(self, Some(surface), serial);
@@ -30,20 +36,48 @@ impl Hazel {
             keyboard.set_focus(self, None, serial);
         }
 
-        pointer.button(
-            self,
-            &ButtonEvent {
-                button,
-                state,
-                serial,
-                time,
-            },
-        );
+        let pressed = self
+            .compositor
+            .pointer_pressed
+            .entry(pointer.clone())
+            .or_default();
+
+        if state == ButtonState::Pressed {
+            pressed.push(button);
+        } else {
+            pressed.retain(|&b| b != button);
+        }
+
+        let button_event = ButtonEvent {
+            button,
+            state,
+            serial,
+            time,
+        };
+
+        pointer.button(self, &button_event);
 
         pointer.frame(self);
+
+        let event = LuaPointerButtonEvent {
+            event: button_event,
+            pointer: pointer.clone(),
+            default_prevented: Default::default(),
+        };
+
+        self.wm()
+            .input
+            .events
+            .emit(LuaPointerButtonEvent::name(), event)
+            .into_miette()?;
+
+        Ok(())
     }
 
-    pub fn on_pointer_motion<B: InputBackend>(&mut self, event: B::PointerMotionEvent) {
+    pub fn on_pointer_motion<B: InputBackend>(
+        &mut self,
+        event: B::PointerMotionEvent,
+    ) -> Result<()> {
         let device_id = event.device().id();
         let delta = event.delta();
         let delta_unaccel = event.delta_unaccel();
@@ -62,12 +96,14 @@ impl Hazel {
         );
 
         pointer.frame(self);
+
+        Ok(())
     }
 
     pub fn on_pointer_absolute<B: InputBackend>(
         &mut self,
         event: B::PointerMotionAbsoluteEvent,
-    ) {
+    ) -> Result<()> {
         let device_id = event.device().id();
         let (_, pointer_handle) = self.compositor.get_pointer_handle(&device_id).unwrap();
         let previous_position = pointer_handle.current_location();
@@ -114,9 +150,13 @@ impl Hazel {
                 time,
             },
         );
+
+        pointer_handle.frame(self);
+
+        Ok(())
     }
 
-    pub fn on_pointer_axis<B: InputBackend>(&mut self, event: B::PointerAxisEvent) {
+    pub fn on_pointer_axis<B: InputBackend>(&mut self, event: B::PointerAxisEvent) -> Result<()> {
         let device_id = event.device().id();
 
         let (_, pointer) = self.compositor.get_pointer_handle(&device_id).unwrap();
@@ -140,5 +180,7 @@ impl Hazel {
         );
 
         pointer.frame(self);
+
+        Ok(())
     }
 }

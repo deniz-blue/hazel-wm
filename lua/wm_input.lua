@@ -23,7 +23,7 @@ local pointer = {}
 ---@return Point
 function pointer:position() end
 
----@return integer[]
+---@return WmButton[]
 function pointer:buttons() end
 
 --------------------- Input Events ---------------------
@@ -46,6 +46,7 @@ local Keysym = {}
 ---@alias ModifierState { alt: boolean, ctrl: boolean, shift: boolean, logo: boolean }
 
 ---@class KeyboardEvent
+---@field keyboard Keyboard
 ---@field keycode integer
 ---@field modifiers ModifierState
 ---@field state "Pressed" | "Released"
@@ -59,9 +60,14 @@ function KeyboardEvent:prevent_default() end
 
 ---@class PointerMotionEvent
 ---@field position Point
+---@field pointer Pointer
+---@field output_position Point | nil
+---@field prevent_default fun()
 local PointerMotionEvent = {}
 
 ---@class PointerButtonEvent
----@field button integer
+---@field button WmButton
 ---@field state "Pressed" | "Released"
+---@field pointer Pointer
+---@field prevent_default fun()
 local PointerButtonEvent = {}

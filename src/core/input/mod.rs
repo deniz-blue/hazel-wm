@@ -1,3 +1,4 @@
+use miette::Result;
 use smithay::backend::input::{InputBackend, InputEvent};
 
 use crate::core::Hazel;
@@ -8,10 +9,7 @@ pub mod pointer;
 pub mod pointer_events;
 
 impl Hazel {
-    pub fn process_input<B: InputBackend>(
-        &mut self,
-        event: InputEvent<B>,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn process_input<B: InputBackend>(&mut self, event: InputEvent<B>) -> Result<()> {
         match event {
             InputEvent::DeviceAdded { device } => self.on_device_added(device),
             InputEvent::DeviceRemoved { device } => self.on_device_removed(device),
@@ -24,9 +22,7 @@ impl Hazel {
 
             InputEvent::PointerButton { event } => self.on_pointer_button::<B>(event),
 
-            _ => {}
+            _ => Ok(()),
         }
-
-        Ok(())
     }
 }

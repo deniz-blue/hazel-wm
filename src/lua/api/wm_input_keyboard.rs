@@ -9,7 +9,7 @@ use smithay::{
 
 use crate::{
     core::{GlobalHazel, Hazel},
-    lua::api::wm_input_keysym::LuaKeysym,
+    lua::api::wm_input_sym::LuaKeysym,
 };
 
 pub struct WmInputKeyboard(pub KeyboardHandle<Hazel>);

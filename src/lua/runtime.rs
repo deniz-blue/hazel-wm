@@ -5,7 +5,7 @@ use mlua::{IntoLua, Lua};
 
 use crate::{
     core::{GlobalHazel, HazelEventLoop},
-    lua::api::{wm::Wm, wm_input_keysym::LuaKeys},
+    lua::api::{wm::Wm, wm_input_sym::LuaKeys},
 };
 
 pub struct HazelLua {

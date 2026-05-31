@@ -1,3 +1,4 @@
+use miette::Result;
 use smithay::{
     backend::input::{Device, Event, InputBackend, KeyboardKeyEvent},
     input::keyboard::FilterResult,
@@ -7,7 +8,7 @@ use smithay::{
 use crate::{core::Hazel, lua::api::wm_input_keyboard::KeyboardEvent};
 
 impl Hazel {
-    pub fn on_keyboard_key<B: InputBackend>(&mut self, event: B::KeyboardKeyEvent) {
+    pub fn on_keyboard_key<B: InputBackend>(&mut self, event: B::KeyboardKeyEvent) -> Result<()> {
         let device_id = event.device().id();
         let keycode = event.key_code();
         let state = event.state();
@@ -49,5 +50,7 @@ impl Hazel {
                 }
             },
         );
+		
+        Ok(())
     }
 }
