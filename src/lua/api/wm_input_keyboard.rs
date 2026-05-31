@@ -1,46 +1,36 @@
-use std::cell::RefCell;
+use std::{cell::RefCell, rc::Rc};
 
 use mlua::UserData;
 use smithay::{
     backend::input::{KeyState, Keycode},
-    input::keyboard::{Keysym, ModifiersState, XkbConfig},
+    input::keyboard::{KeyboardHandle, Keysym, ModifiersState, XkbConfig},
     utils::Serial,
 };
 
-use crate::core::GlobalHazel;
+use crate::core::{GlobalHazel, Hazel};
 
-pub struct WmInputKeyboard;
+pub struct WmInputKeyboard(pub KeyboardHandle<Hazel>);
 
 impl UserData for WmInputKeyboard {
     fn add_methods<M: mlua::prelude::LuaUserDataMethods<Self>>(methods: &mut M) {
-        methods.add_method("get_layout", |_, _, _: ()| {
+        methods.add_method("get_layout", |_, this, _: ()| {
             GlobalHazel::with(|hazel| {
-                Ok(hazel
-                    .compositor
-                    .seat
-                    .get_keyboard()
-                    .unwrap()
-                    .with_xkb_state(hazel, |k| {
-                        let state = k.xkb().lock().unwrap();
-                        state.layout_name(state.active_layout()).to_owned()
-                    }))
+                Ok(this.0.with_xkb_state(hazel, |k| {
+                    let state = k.xkb().lock().unwrap();
+                    state.layout_name(state.active_layout()).to_owned()
+                }))
             })
         });
 
-        methods.add_method("set_layout", |_, _, keymap: String| {
+        methods.add_method("set_layout", |_, this, keymap: String| {
             GlobalHazel::with(|hazel| {
-                let result = hazel
-                    .compositor
-                    .seat
-                    .get_keyboard()
-                    .unwrap()
-                    .set_xkb_config(
-                        hazel,
-                        XkbConfig {
-                            layout: &keymap,
-                            ..XkbConfig::default()
-                        },
-                    );
+                let result = this.0.set_xkb_config(
+                    hazel,
+                    XkbConfig {
+                        layout: &keymap,
+                        ..XkbConfig::default()
+                    },
+                );
 
                 if let Err(e) = &result {
                     println!("Failed to set keyboard layout to \"{}\": {}", keymap, e);
@@ -52,6 +42,7 @@ impl UserData for WmInputKeyboard {
     }
 }
 
+#[derive(Clone, Debug)]
 pub struct KeyboardEvent {
     pub keycode: Keycode,
     pub keysyms: Vec<Keysym>,
@@ -59,7 +50,21 @@ pub struct KeyboardEvent {
     pub state: KeyState,
     pub serial: Serial,
     pub time: u32,
-    pub default_prevented: RefCell<bool>,
+    pub default_prevented: Rc<RefCell<bool>>,
+}
+
+impl KeyboardEvent {
+	pub fn name() -> String {
+		"key".to_owned()
+	}
+
+	pub fn prevent_default(&self) {
+		self.default_prevented.replace(true);
+	}
+
+	pub fn is_default_prevented(&self) -> bool {
+		self.default_prevented.borrow().clone()
+	}
 }
 
 impl UserData for KeyboardEvent {

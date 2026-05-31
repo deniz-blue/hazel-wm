@@ -1,8 +1,6 @@
 ---@meta
 
 ---@class WmInput
----@field keyboard Keyboard
----@field pointer Pointer
 local input = {}
 
 --------------------- Keyboard ---------------------
@@ -30,13 +28,16 @@ function pointer:buttons() end
 
 --------------------- Input Events ---------------------
 
----@alias InputEvent "keyboard" | "pointer_move" | "pointer_button"
+---@param event "pointer_move"
+---@param callback fun(e: PointerMotionEvent)
+function input:on(event, callback) end
 
----@param event InputEvent
----@param callback function
----@overload fun(event: "keyboard", callback: fun(e: KeyboardEvent))
----@overload fun(event: "pointer_move", callback: fun(e: PointerMotionEvent))
----@overload fun(event: "pointer_button", callback: fun(e: PointerButtonEvent))
+---@param event "pointer_button"
+---@param callback fun(e: PointerButtonEvent)
+function input:on(event, callback) end
+
+---@param event "key"
+---@param callback fun(e: KeyboardEvent)
 function input:on(event, callback) end
 
 ---@alias ModifierState { alt: boolean, ctrl: boolean, shift: boolean, logo: boolean }

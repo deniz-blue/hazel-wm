@@ -1,17 +1,13 @@
 print("Meowing on " .. wm.name)
 
-wm.input.keyboard:set_layout("tr")
-
-local drag_start_pointer = nil
-local drag_start_output = nil
+-- wm.input.keyboard:set_layout("tr")
 
 wm:on("ready", function()
 	print("WM is ready!")
 	spawn("alacritty")
 end)
 
----@param e KeyboardEvent
-wm.input:on("keyboard", function(e)
+wm.input:on("key", function(e)
 	print("KEY EVENT: " .. e.keycode)
 
 	-- Alt + T
@@ -53,49 +49,12 @@ wm.input:on("keyboard", function(e)
 	end
 end)
 
-local last_pointer_pos = wm.input.pointer:position()
 wm.input:on("pointer_move", function(e)
-	local delta = {
-		x = e.position.x - last_pointer_pos.x,
-		y = e.position.y - last_pointer_pos.y,
-	}
-	last_pointer_pos = e.position
 	
-	print("Pointer moved by " .. delta.x .. ", " .. delta.y)
-
-	if #wm.input.pointer:buttons() > 0 then
-		local output = wm.outputs:name("winit")
-		if not output then
-			print("Output not found")
-			return
-		end
-		local pos = output:position()
-		local dest_pos = {
-			x = pos.x - delta.x,
-			y = pos.y - delta.y,
-		}
-		output:set_position(dest_pos)
-		print("Moving output to " .. dest_pos.x .. ", " .. dest_pos.y)
-		e:prevent_default()
-	else
-		print(".")
-	end
 end)
 
 wm.input:on("pointer_button", function(e)
-	if e.state == "Pressed" then
-		local output = wm.outputs:name("winit")
-		if not output then
-			print("Output not found")
-			return
-		end
-
-		drag_start_pointer = wm.input.pointer:position()
-		drag_start_output = output:position()
-	elseif e.state == "Released" then
-		drag_start_pointer = nil
-		drag_start_output = nil
-	end
+	
 end)
 
 wm.outputs:on("added", function(e)

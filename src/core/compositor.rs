@@ -1,8 +1,8 @@
-use std::{ffi::OsString, sync::Arc};
+use std::{collections::HashMap, ffi::OsString, sync::Arc};
 
 use smithay::{
     desktop::{PopupManager, Space, Window, WindowSurfaceType},
-    input::{Seat, SeatState, keyboard::XkbConfig},
+    input::{Seat, SeatState, keyboard::KeyboardHandle, pointer::PointerHandle},
     reexports::wayland_server::{DisplayHandle, protocol::wl_surface::WlSurface},
     utils::{Logical, Point},
     wayland::{
@@ -17,13 +17,17 @@ use smithay::{
 
 use smithay::reexports::wayland_protocols_misc::server_decoration::server::org_kde_kwin_server_decoration_manager::Mode;
 
-use crate::core::{Hazel, HazelEventLoop, client_state::ClientState};
+use crate::core::{
+    Hazel, HazelEventLoop, client_state::ClientState, input::pointer::PointerAbsoluteMapping,
+};
 
 pub struct HazelCompositor {
     pub socket_name: OsString,
     pub space: Space<Window>,
     pub smithay: HazelSmithay,
-    pub seat: Seat<Hazel>,
+    pub seats: HashMap<String, Seat<Hazel>>,
+    pub device_to_seat: HashMap<String, String>,
+    pub pointer_mapping: HashMap<String, PointerAbsoluteMapping>,
 }
 
 pub struct HazelSmithay {
@@ -46,13 +50,7 @@ impl HazelCompositor {
         let kde_decoration_state = KdeDecorationState::new::<Hazel>(&dh, Mode::Client);
         let output_manager_state = OutputManagerState::new_with_xdg_output::<Hazel>(&dh);
         let data_device_state = DataDeviceState::new::<Hazel>(&dh);
-
-        let mut seat_state = SeatState::new();
-        let mut seat = seat_state.new_wl_seat(&dh, "meow");
-
-        // ! Hack
-        seat.add_keyboard(XkbConfig::default(), 200, 25).unwrap();
-        seat.add_pointer();
+        let seat_state = SeatState::new();
 
         let space = Space::default();
 
@@ -73,15 +71,15 @@ impl HazelCompositor {
                 kde_decoration_state,
             },
 
-            seat,
+            seats: HashMap::new(),
+            device_to_seat: HashMap::new(),
+            pointer_mapping: HashMap::new(),
         }
     }
 
     fn init_wayland_listener(event_loop: &mut HazelEventLoop) -> OsString {
         let listening_socket = ListeningSocketSource::new_auto().unwrap();
-
         let socket_name = listening_socket.socket_name().to_os_string();
-
         let loop_handle = event_loop.handle();
 
         loop_handle
@@ -95,6 +93,26 @@ impl HazelCompositor {
             .expect("Failed to init the wayland event source.");
 
         socket_name
+    }
+
+    pub fn get_seat_of(&self, device_id: &str) -> Option<Seat<Hazel>> {
+        self.device_to_seat
+            .get(device_id)
+            .and_then(|seat_name| self.seats.get(seat_name).cloned())
+    }
+
+    pub fn get_pointer_handle(&self, device_id: &str) -> Option<(Seat<Hazel>, PointerHandle<Hazel>)> {
+        self.get_seat_of(device_id)
+            .and_then(|seat| seat.get_pointer().map(|pointer| (seat, pointer)))
+    }
+
+    pub fn get_keyboard_handle(&self, device_id: &str) -> Option<(Seat<Hazel>, KeyboardHandle<Hazel>)> {
+        self.get_seat_of(device_id)
+            .and_then(|seat| seat.get_keyboard().map(|keyboard| (seat, keyboard)))
+    }
+
+    pub fn window_under(&self, pos: Point<f64, Logical>) -> Option<(&Window, Point<i32, Logical>)> {
+        self.space.element_under(pos)
     }
 
     pub fn surface_under(

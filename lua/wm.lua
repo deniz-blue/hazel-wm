@@ -7,9 +7,6 @@
 ---@field windows WmWindows
 wm = {}
 
----@alias WmEvent "ready" | "commit"
-
----@overload fun(event: "ready", callback: fun())
----@overload fun(event: "commit", callback: fun())
----@param event WmEvent
+---@param event "ready"
+---@param callback fun()
 function wm:on(event, callback) end

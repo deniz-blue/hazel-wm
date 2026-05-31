@@ -2,24 +2,17 @@ use std::cell::RefCell;
 
 use mlua::UserData;
 use smithay::{
-    input::pointer::{ButtonEvent, MotionEvent},
+    input::pointer::{ButtonEvent, MotionEvent, PointerHandle},
     utils::{Logical, Point},
 };
 
-use crate::{core::GlobalHazel, lua::api::utils::LuaPoint};
+use crate::{core::{GlobalHazel, Hazel}, lua::api::utils::LuaPoint};
 
-pub struct WmInputPointer;
+pub struct WmInputPointer(pub PointerHandle<Hazel>);
 
 impl WmInputPointer {
-    pub fn position() -> Result<LuaPoint<f64, Logical>, mlua::Error> {
-        GlobalHazel::with(|hazel| {
-            Ok(hazel
-                .compositor
-                .seat
-                .get_pointer()
-                .map(|pointer| LuaPoint(pointer.current_location()))
-                .unwrap_or_else(|| LuaPoint(Point::new(0.0, 0.0))))
-        })
+    pub fn position(&self) -> Result<LuaPoint<f64, Logical>, mlua::Error> {
+        Ok(LuaPoint(self.0.current_location()))
     }
 
     pub fn buttons() -> Result<Vec<u32>, mlua::Error> {
@@ -29,8 +22,8 @@ impl WmInputPointer {
 
 impl UserData for WmInputPointer {
     fn add_methods<M: mlua::prelude::LuaUserDataMethods<Self>>(methods: &mut M) {
-        methods.add_function("position", |_, ()| Self::position());
-        methods.add_function("buttons", |_, ()| Self::buttons());
+        methods.add_method("position", |_, this, _: ()| this.position());
+        methods.add_method("buttons", |_, _, _: ()| Self::buttons());
     }
 }
 
@@ -52,6 +45,7 @@ impl UserData for LuaPointerButtonEvent {
 #[derive(Clone)]
 pub struct LuaPointerMotionEvent {
 	pub event: MotionEvent,
+    pub output_position: Point<f64, Logical>,
 	pub default_prevented: RefCell<bool>,
 }
 
@@ -64,6 +58,7 @@ impl LuaPointerMotionEvent {
 impl UserData for LuaPointerMotionEvent {
     fn add_fields<F: mlua::prelude::LuaUserDataFields<Self>>(fields: &mut F) {
         fields.add_field_method_get("position", |_, this| Ok(LuaPoint(this.event.location)));
+		fields.add_field_method_get("output_position", |_, this| Ok(LuaPoint(this.output_position)));
     }
 
 	fn add_methods<M: mlua::prelude::LuaUserDataMethods<Self>>(methods: &mut M) {
