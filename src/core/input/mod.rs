@@ -18,9 +18,9 @@ impl Hazel {
             InputEvent::Keyboard { event } => self.on_keyboard_key::<B>(event),
 
             InputEvent::PointerMotion { event } => self.on_pointer_motion::<B>(event),
-            InputEvent::PointerMotionAbsolute { event } => {
-                self.on_pointer_motion_absolute::<B>(event)
-            }
+            InputEvent::PointerMotionAbsolute { event } => self.on_pointer_absolute::<B>(event),
+
+            InputEvent::PointerAxis { event } => self.on_pointer_axis::<B>(event),
 
             InputEvent::PointerButton { event } => self.on_pointer_button::<B>(event),
 

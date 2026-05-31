@@ -1,9 +1,10 @@
 use smithay::{
     backend::input::{
-        AbsolutePositionEvent, Device, Event, InputBackend, PointerButtonEvent, PointerMotionEvent,
+        AbsolutePositionEvent, Axis, AxisRelativeDirection, Device, Event, InputBackend,
+        PointerAxisEvent, PointerButtonEvent, PointerMotionEvent,
     },
     desktop::WindowSurfaceType,
-    input::pointer::{ButtonEvent, MotionEvent, RelativeMotionEvent},
+    input::pointer::{AxisFrame, ButtonEvent, MotionEvent, RelativeMotionEvent},
     utils::SERIAL_COUNTER,
 };
 
@@ -63,7 +64,7 @@ impl Hazel {
         pointer.frame(self);
     }
 
-    pub fn on_pointer_motion_absolute<B: InputBackend>(
+    pub fn on_pointer_absolute<B: InputBackend>(
         &mut self,
         event: B::PointerMotionAbsoluteEvent,
     ) {
@@ -113,5 +114,31 @@ impl Hazel {
                 time,
             },
         );
+    }
+
+    pub fn on_pointer_axis<B: InputBackend>(&mut self, event: B::PointerAxisEvent) {
+        let device_id = event.device().id();
+
+        let (_, pointer) = self.compositor.get_pointer_handle(&device_id).unwrap();
+
+        pointer.axis(
+            self,
+            AxisFrame {
+                axis: (
+                    event.amount(Axis::Horizontal).unwrap_or_default(),
+                    event.amount(Axis::Vertical).unwrap_or_default(),
+                ),
+                source: Some(event.source()),
+                time: event.time_msec(),
+                stop: (false, false),
+                relative_direction: (
+                    AxisRelativeDirection::Identical,
+                    AxisRelativeDirection::Identical,
+                ),
+                v120: None, // eeh later
+            },
+        );
+
+        pointer.frame(self);
     }
 }
