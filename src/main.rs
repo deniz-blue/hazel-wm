@@ -8,8 +8,14 @@ use smithay::reexports::calloop::EventLoop;
 
 use crate::backend::Backend;
 use crate::core::{GlobalHazel, Hazel, HazelEventLoop};
+use crate::lua::export_typedefs::dump_typedefs;
 
 fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
+    if std::env::args().any(|arg| arg == "--dump-typedefs") {
+        dump_typedefs();
+        return Ok(());
+    }
+
     init_logging();
 
     let mut event_loop: HazelEventLoop = EventLoop::try_new().map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;

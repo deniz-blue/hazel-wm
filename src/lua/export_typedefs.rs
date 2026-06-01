@@ -1,18 +1,26 @@
+use smithay::utils::Logical;
+
 use crate::lua::{
     api::{
-        wm::Wm,
-        wm_input::WmInput,
-        wm_input_pointer::{PointerButtonEvent, PointerMoveEvent, WmInputPointer},
-        wm_input_sym::{LuaKeys, LuaKeysym, LuaMouseButton, LuaMouseButtons},
-        wm_outputs::{LuaOutputMode, WmOutputHandle, WmOutputs},
-		wm_input_keyboard::{WmInputKeyboard, KeyboardEvent}
+        utils::{LuaPoint, LuaSize}, wm::Wm, wm_input::WmInput, wm_input_keyboard::{KeyboardEvent, ModifiersStateUserData, WmInputKeyboard}, wm_input_pointer::{PointerButtonEvent, PointerMoveEvent, WmInputPointer}, wm_input_sym::{LuaKeys, LuaKeysym, LuaMouseButton, LuaMouseButtons}, wm_outputs::{LuaOutputMode, WmOutputHandle, WmOutputs}
     },
     typedefs::LuaTypeDef,
 };
 
 pub fn dump_typedefs() {
+    println!("---@meta");
+    println!();
     println!("---@alias Array<T> T[]");
-    println!("---@alias Nillable<T> T?");
+    println!("---@alias Option<T> T?");
+    println!();
+    println!("---@type table<string, Keysym>");
+    println!("Key = {{}}");
+    println!();
+    println!("---@type table<string, MouseButton>");
+    println!("Button = {{}}");
+
+	LuaPoint::<f64, Logical>::dump();
+	LuaSize::<f64, Logical>::dump();
 
     Wm::dump();
 
@@ -29,7 +37,11 @@ pub fn dump_typedefs() {
     LuaKeys::dump();
     WmInputKeyboard::dump();
     KeyboardEvent::dump();
+	ModifiersStateUserData::dump();
 
     LuaOutputMode::dump();
     WmOutputHandle::dump();
+
+	println!("---@param command string");
+	println!("function spawn(command) end");
 }

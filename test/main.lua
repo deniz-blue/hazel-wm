@@ -23,16 +23,18 @@ wm.input:on("key", function(e)
 		e:prevent_default()
 	end
 
-	local delta = {
-		[111] = { x = 0, y = -10 }, -- Up
-		[116] = { x = 0, y = 10 }, -- Down
-		[113] = { x = -10, y = 0 }, -- Left
-		[114] = { x = 10, y = 0 }, -- Right
+	local deltamap = {
+		[tostring(Key.Up)] = { x = 0, y = -10 }, -- Up
+		[tostring(Key.Down)] = { x = 0, y = 10 }, -- Down
+		[tostring(Key.Left)] = { x = -10, y = 0 }, -- Left
+		[tostring(Key.Right)] = { x = 10, y = 0 }, -- Right
 	}
 
-	if e.state == "Pressed"
-		and e.modifiers.alt
-		and delta[e.keycode] then
+	local delta = deltamap[tostring(e.key)]
+
+	print("Modifiers: " .. (e.modifiers.alt and "Alt " or "") .. (e.modifiers.shift and "Shift " or "") .. (e.modifiers.ctrl and "Ctrl " or "") .. (e.modifiers.logo and "Logo " or ""))
+
+	if e.modifiers.alt and delta then
 		e:prevent_default()
 		print("Moving output")
 		local output = wm.outputs:name("winit")
@@ -43,22 +45,39 @@ wm.input:on("key", function(e)
 		local pos = output:position()
 		print("Current position: " .. pos.x .. ", " .. pos.y)
 		output:set_position({
-			x = pos.x + delta[e.keycode].x,
-			y = pos.y + delta[e.keycode].y
+			x = pos.x + delta.x,
+			y = pos.y + delta.y
 		})
 	end
 end)
 
 wm.input:on("pointer_move", function(e)
-	
+	-- print("Pointer moved to " .. e.position.x .. ", " .. e.position.y .. " with delta " .. e.delta.x .. ", " .. e.delta.y)
+
+	-- lets try adding output dragging with mb1 + mouse move
+
+	if e.pointer:buttons() then
+		print("Pointer buttons: " .. table.concat(e.pointer:buttons()))
+
+		if e.pointer:buttons()[1] then
+			print("Dragging output")
+			local output = wm.outputs:name("winit")
+			if not output then
+				print("Output not found")
+				return
+			end
+			local pos = output:position()
+			print("Current position: " .. pos.x .. ", " .. pos.y)
+			output:set_position({
+				x = pos.x - e.delta.x,
+				y = pos.y - e.delta.y
+			})
+		end
+	end
 end)
 
 wm.input:on("pointer_button", function(e)
 	
-end)
-
-wm.outputs:on("added", function(e)
-	print("Output added " .. wm.outputs:count())
 end)
 
 -- wm.outputs.winit:move({ x = -200, y = -200 })

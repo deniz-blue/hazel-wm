@@ -45,5 +45,6 @@ lua_typedef!(Wm => Wm {
     let input: WmInput;
     let windows: WmWindows;
     let outputs: WmOutputs;
+	use ready => nil;
     fn quit() -> nil;
 });

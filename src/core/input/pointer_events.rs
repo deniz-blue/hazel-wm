@@ -167,6 +167,12 @@ impl Hazel {
 
         pointer_handle.frame(self);
 
+		self.wm()
+			.input
+			.events
+			.emit(PointerMoveEvent::name(), event)
+			.into_box()?;
+
         Ok(())
     }
 

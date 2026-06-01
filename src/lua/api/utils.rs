@@ -1,7 +1,9 @@
 use std::fmt::Display;
 
 use mlua::{FromLua, IntoLua, UserData};
-use smithay::utils::{Coordinate, Point, Size};
+use smithay::utils::{Coordinate, Logical, Point, Size};
+
+use crate::lua_typedef;
 
 pub struct LuaSize<N, Kind>(pub Size<N, Kind>);
 
@@ -81,3 +83,13 @@ impl<N, Kind> From<Point<N, Kind>> for LuaPoint<N, Kind> {
         LuaPoint(point)
     }
 }
+
+lua_typedef!(Size => LuaSize<f64, Logical> {
+	let width: number;
+	let height: number;
+});
+
+lua_typedef!(Point => LuaPoint<f64, Logical> {
+	let x: number;
+	let y: number;
+});
