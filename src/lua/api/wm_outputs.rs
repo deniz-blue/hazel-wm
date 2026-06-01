@@ -119,11 +119,11 @@ impl UserData for WmOutputHandle {
         methods.add_method("position", |_, this, _: ()| {
             Ok(this.0.upgrade().map(|o| LuaPoint(o.current_location())))
         });
-        methods.add_method("set_position", |_, this, point: LuaPoint<i32, _>| {
+        methods.add_method("set_position", |_, this, point: LuaPoint<f64, _>| {
             if let Some(output) = this.0.upgrade() {
-                output.change_current_state(None, None, None, Some(point.0));
+                output.change_current_state(None, None, None, Some(point.0.to_i32_round()));
                 GlobalHazel::with(|hazel| {
-                    hazel.compositor.space.map_output(&output, point.0);
+                    hazel.compositor.space.map_output(&output, point.0.to_i32_round());
                     Ok(())
                 })?;
             }

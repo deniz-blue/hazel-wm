@@ -131,21 +131,20 @@ impl Hazel {
                 .next()
                 .or_else(|| self.compositor.space.outputs().next())
                 .and_then(|o| self.compositor.space.output_geometry(o))
-                .map(|geo| geo.size)
-                .unwrap_or((0, 0).into()),
+                .unwrap_or_default(),
 
             PointerAbsoluteMapping::Output(output) => self
                 .compositor
                 .space
                 .output_geometry(output)
-                .map(|geo| geo.size)
-                .unwrap_or((0, 0).into()),
+                .unwrap_or_default(),
 
-            PointerAbsoluteMapping::Space(size) => *size,
+            PointerAbsoluteMapping::Space(rect) => *rect,
         };
 
         let serial = SERIAL_COUNTER.next_serial();
-        let location = event.position_transformed(coordinate_space);
+        let location_output = event.position_transformed(coordinate_space.size);
+		let location = location_output + coordinate_space.loc.to_f64();
         let utime = event.time();
 
         let pointer_over = self.compositor.surface_under(location);
@@ -157,21 +156,21 @@ impl Hazel {
             pointer: pointer_handle.clone(),
             delta,
             delta_unaccel: delta,
-            output_position: Some(location),
+            output_position: Some(location_output),
             position: location,
             serial,
             utime,
         };
 
-        pointer_handle.motion(self, pointer_over, &event.motion());
-
-        pointer_handle.frame(self);
-
 		self.wm()
 			.input
 			.events
-			.emit(PointerMoveEvent::name(), event)
+			.emit(PointerMoveEvent::name(), event.clone())
 			.into_box()?;
+	
+        pointer_handle.motion(self, pointer_over, &event.motion());
+
+        pointer_handle.frame(self);
 
         Ok(())
     }

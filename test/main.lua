@@ -67,7 +67,7 @@ wm.input:on("pointer_move", function(e)
 				return
 			end
 			local pos = output:position()
-			print("Current position: " .. pos.x .. ", " .. pos.y)
+			print("Moving Output: " .. pos.x .. ", " .. pos.y .. " with delta " .. e.delta.x .. ", " .. e.delta.y)
 			output:set_position({
 				x = pos.x - e.delta.x,
 				y = pos.y - e.delta.y

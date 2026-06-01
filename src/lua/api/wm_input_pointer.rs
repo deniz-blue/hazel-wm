@@ -2,7 +2,9 @@ use std::cell::RefCell;
 
 use mlua::UserData;
 use smithay::{
-    backend::input::ButtonState, input::pointer::{ButtonEvent, MotionEvent, PointerHandle, RelativeMotionEvent}, utils::{Logical, Point, Serial}
+    backend::input::ButtonState,
+    input::pointer::{ButtonEvent, MotionEvent, PointerHandle, RelativeMotionEvent},
+    utils::{Logical, Point, Serial},
 };
 
 use crate::{
@@ -43,10 +45,10 @@ lua_typedef!(Pointer => WmInputPointer {
 });
 
 pub struct PointerButtonEvent {
-	pub serial: Serial,
-	pub utime: u64,
-	pub button: u32,
-	pub state: ButtonState,
+    pub serial: Serial,
+    pub utime: u64,
+    pub button: u32,
+    pub state: ButtonState,
     pub pointer: PointerHandle<Hazel>,
     pub default_prevented: RefCell<bool>,
 }
