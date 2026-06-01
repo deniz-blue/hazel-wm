@@ -9,7 +9,7 @@ use smithay::reexports::calloop::EventLoop;
 use crate::backend::Backend;
 use crate::core::{GlobalHazel, Hazel, HazelEventLoop};
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() -> Result<()> {
     init_logging();
 
     let mut event_loop: HazelEventLoop = EventLoop::try_new()?;

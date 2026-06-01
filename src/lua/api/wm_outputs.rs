@@ -10,6 +10,7 @@ use crate::{
         api::utils::{LuaPoint, LuaSize},
         event_handler::LuaEventHandler,
     },
+    lua_typedef,
 };
 
 #[derive(Default)]
@@ -73,6 +74,11 @@ impl UserData for WmOutputs {
     }
 }
 
+lua_typedef!(WmOutputs => WmOutputs {
+    fn count() -> number;
+    fn name(name: string) -> WmOutput;
+});
+
 pub struct WmOutputHandle(WeakOutput);
 
 impl WmOutputHandle {}
@@ -126,6 +132,15 @@ impl UserData for WmOutputHandle {
     }
 }
 
+lua_typedef!(WmOutput => WmOutputHandle {
+    let name: string;
+    let description: string;
+    let mode: OutputMode;
+    let properties: table;
+    fn position() -> Point;
+    fn set_position(point: Point) -> nil;
+});
+
 pub struct LuaOutputMode(Mode);
 
 impl IntoLua for LuaOutputMode {
@@ -136,3 +151,8 @@ impl IntoLua for LuaOutputMode {
         Ok(Value::Table(table))
     }
 }
+
+lua_typedef!(OutputMode => LuaOutputMode {
+    let size: Size;
+    let refresh: number;
+});

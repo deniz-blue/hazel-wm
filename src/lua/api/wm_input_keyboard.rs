@@ -10,6 +10,7 @@ use smithay::{
 use crate::{
     core::{GlobalHazel, Hazel},
     lua::api::wm_input_sym::LuaKeysym,
+    lua_typedef,
 };
 
 pub struct WmInputKeyboard(pub KeyboardHandle<Hazel>);
@@ -44,6 +45,11 @@ impl UserData for WmInputKeyboard {
         });
     }
 }
+
+lua_typedef!(Keyboard => WmInputKeyboard {
+	fn get_layout() -> string;
+	fn set_layout(keymap: string) -> boolean;
+});
 
 #[derive(Clone, Debug)]
 pub struct KeyboardEvent {
@@ -98,6 +104,17 @@ impl UserData for KeyboardEvent {
     }
 }
 
+lua_typedef!(KeyboardEvent => KeyboardEvent {
+    let state: string;
+    let serial: number;
+    let time: number;
+    let keycode: number;
+    let key: Keysym;
+    let keys: Array<Keysym>;
+    let modifiers: ModifiersState;
+    fn prevent_default() -> nil;
+});
+
 pub struct ModifiersStateUserData(pub ModifiersState);
 
 impl UserData for ModifiersStateUserData {
@@ -111,3 +128,13 @@ impl UserData for ModifiersStateUserData {
         fields.add_field_method_get("altgr", |_, this| Ok(this.0.iso_level3_shift));
     }
 }
+
+lua_typedef!(ModifiersState => ModifiersStateUserData {
+    let shift: boolean;
+    let ctrl: boolean;
+    let alt: boolean;
+    let logo: boolean;
+    let caps_lock: boolean;
+    let num_lock: boolean;
+    let altgr: boolean;
+});

@@ -1,4 +1,4 @@
-pub mod constants;
+pub mod globals;
 pub mod macros;
 pub mod utils;
 pub mod wm;

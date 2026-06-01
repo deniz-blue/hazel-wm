@@ -8,7 +8,8 @@ use smithay::{
 
 use crate::{
     core::{GlobalHazel, Hazel},
-    lua::api::utils::LuaPoint,
+    lua::api::{utils::LuaPoint, wm_input_sym::LuaMouseButton},
+    lua_typedef,
 };
 
 pub struct WmInputPointer(pub PointerHandle<Hazel>);
@@ -19,7 +20,14 @@ impl WmInputPointer {
     }
 
     pub fn buttons(&self) -> Result<Vec<u32>, mlua::Error> {
-        GlobalHazel::with(|hazel| Ok(hazel.compositor.pointer_pressed.get(&self.0).cloned().unwrap_or_default()))
+        GlobalHazel::with(|hazel| {
+            Ok(hazel
+                .compositor
+                .pointer_pressed
+                .get(&self.0)
+                .cloned()
+                .unwrap_or_default())
+        })
     }
 }
 
@@ -29,6 +37,11 @@ impl UserData for WmInputPointer {
         methods.add_method("buttons", |_, this, _: ()| this.buttons());
     }
 }
+
+lua_typedef!(Pointer => WmInputPointer {
+    fn position() -> Point;
+    fn buttons() -> table<MouseButton>;
+});
 
 pub struct LuaPointerButtonEvent {
     pub event: ButtonEvent,
@@ -44,7 +57,7 @@ impl LuaPointerButtonEvent {
 
 impl UserData for LuaPointerButtonEvent {
     fn add_fields<F: mlua::prelude::LuaUserDataFields<Self>>(fields: &mut F) {
-        fields.add_field_method_get("button", |_, this| Ok(this.event.button));
+        fields.add_field_method_get("button", |_, this| Ok(LuaMouseButton(this.event.button)));
         fields.add_field_method_get("state", |_, this| Ok(format!("{:?}", this.event.state)));
         fields.add_field_method_get("pointer", |_, this| {
             Ok(WmInputPointer(this.pointer.clone()))
@@ -58,6 +71,13 @@ impl UserData for LuaPointerButtonEvent {
         });
     }
 }
+
+lua_typedef!(PointerButtonEvent => LuaPointerButtonEvent {
+    let button: MouseButton;
+    let state: string;
+    let pointer: Pointer;
+    fn prevent_default() -> nil;
+});
 
 #[derive(Clone)]
 pub struct LuaPointerMotionEvent {
@@ -91,3 +111,10 @@ impl UserData for LuaPointerMotionEvent {
         });
     }
 }
+
+lua_typedef!(PointerMoveEvent => LuaPointerMotionEvent {
+    let position: Point;
+    let pointer: Pointer;
+    let output_position: Nillable<Pointer>;
+    fn prevent_default() -> nil;
+});

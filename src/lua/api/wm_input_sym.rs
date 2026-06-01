@@ -4,7 +4,7 @@ use smithay::input::keyboard::{
     xkb::{KEYSYM_CASE_INSENSITIVE, keysym_from_name, keysym_get_name},
 };
 
-use crate::lua_concat;
+use crate::{lua_concat, lua_typedef};
 
 pub struct LuaKeysym(pub Keysym);
 
@@ -62,6 +62,8 @@ impl LuaMouseButton {
     }
 }
 
+lua_typedef!(MouseButton => LuaMouseButton {});
+
 impl UserData for LuaMouseButton {
     fn add_methods<M: mlua::prelude::LuaUserDataMethods<Self>>(methods: &mut M) {
         lua_concat!(methods);
@@ -93,6 +95,8 @@ impl UserData for LuaMouseButton {
     }
 }
 
+lua_typedef!(Keysym => LuaKeysym {});
+
 pub struct LuaKeys;
 
 impl UserData for LuaKeys {
@@ -102,6 +106,10 @@ impl UserData for LuaKeys {
         });
     }
 }
+
+lua_typedef!(Keys => LuaKeys {
+	extern Key;
+});
 
 pub struct LuaMouseButtons;
 
@@ -119,3 +127,7 @@ impl UserData for LuaMouseButtons {
         });
     }
 }
+
+lua_typedef!(MouseButtons => LuaMouseButtons {
+	extern Button;
+});

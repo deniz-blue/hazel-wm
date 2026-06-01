@@ -9,6 +9,7 @@ use crate::{
         api::{wm_input::WmInput, wm_outputs::WmOutputs, wm_windows::WmWindows},
         event_handler::LuaEventHandler,
     },
+    lua_typedef,
 };
 
 #[derive(Default)]
@@ -37,3 +38,12 @@ impl UserData for Wm {
         });
     }
 }
+
+lua_typedef!(Wm => Wm {
+    extern wm;
+    let name: string;
+    let input: WmInput;
+    let windows: WmWindows;
+    let outputs: WmOutputs;
+    fn quit() -> nil;
+});
