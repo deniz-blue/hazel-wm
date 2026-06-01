@@ -2,8 +2,7 @@ use std::cell::RefCell;
 
 use mlua::UserData;
 use smithay::{
-    input::pointer::{ButtonEvent, MotionEvent, PointerHandle},
-    utils::{Logical, Point},
+    backend::input::ButtonState, input::pointer::{ButtonEvent, MotionEvent, PointerHandle, RelativeMotionEvent}, utils::{Logical, Point, Serial}
 };
 
 use crate::{
@@ -43,22 +42,34 @@ lua_typedef!(Pointer => WmInputPointer {
     fn buttons() -> table<MouseButton>;
 });
 
-pub struct LuaPointerButtonEvent {
-    pub event: ButtonEvent,
+pub struct PointerButtonEvent {
+	pub serial: Serial,
+	pub utime: u64,
+	pub button: u32,
+	pub state: ButtonState,
     pub pointer: PointerHandle<Hazel>,
     pub default_prevented: RefCell<bool>,
 }
 
-impl LuaPointerButtonEvent {
+impl PointerButtonEvent {
     pub fn name() -> String {
         String::from("pointer_button")
     }
+
+    pub fn button_event(&self) -> ButtonEvent {
+        ButtonEvent {
+            serial: self.serial,
+            time: (self.utime / 1000) as u32,
+            button: self.button,
+            state: self.state,
+        }
+    }
 }
 
-impl UserData for LuaPointerButtonEvent {
+impl UserData for PointerButtonEvent {
     fn add_fields<F: mlua::prelude::LuaUserDataFields<Self>>(fields: &mut F) {
-        fields.add_field_method_get("button", |_, this| Ok(LuaMouseButton(this.event.button)));
-        fields.add_field_method_get("state", |_, this| Ok(format!("{:?}", this.event.state)));
+        fields.add_field_method_get("button", |_, this| Ok(LuaMouseButton(this.button)));
+        fields.add_field_method_get("state", |_, this| Ok(format!("{:?}", this.state)));
         fields.add_field_method_get("pointer", |_, this| {
             Ok(WmInputPointer(this.pointer.clone()))
         });
@@ -72,7 +83,7 @@ impl UserData for LuaPointerButtonEvent {
     }
 }
 
-lua_typedef!(PointerButtonEvent => LuaPointerButtonEvent {
+lua_typedef!(PointerButtonEvent => PointerButtonEvent {
     let button: MouseButton;
     let state: string;
     let pointer: Pointer;
@@ -80,27 +91,53 @@ lua_typedef!(PointerButtonEvent => LuaPointerButtonEvent {
 });
 
 #[derive(Clone)]
-pub struct LuaPointerMotionEvent {
-    pub event: MotionEvent,
-    pub pointer: PointerHandle<Hazel>,
+pub struct PointerMoveEvent {
+    pub delta: Point<f64, Logical>,
+    pub delta_unaccel: Point<f64, Logical>,
+    pub position: Point<f64, Logical>,
     pub output_position: Option<Point<f64, Logical>>,
+    pub pointer: PointerHandle<Hazel>,
+    pub utime: u64,
     pub default_prevented: RefCell<bool>,
+    pub serial: Serial,
 }
 
-impl LuaPointerMotionEvent {
+impl PointerMoveEvent {
     pub fn name() -> String {
         String::from("pointer_move")
     }
+
+    pub fn time_msec(&self) -> u32 {
+        (self.utime / 1000) as u32
+    }
+
+    pub fn motion(&self) -> MotionEvent {
+        MotionEvent {
+            location: self.position,
+            serial: self.serial,
+            time: self.time_msec(),
+        }
+    }
+
+    pub fn relative_motion(&self) -> RelativeMotionEvent {
+        RelativeMotionEvent {
+            delta: self.delta,
+            delta_unaccel: self.delta_unaccel,
+            utime: self.utime,
+        }
+    }
 }
 
-impl UserData for LuaPointerMotionEvent {
+impl UserData for PointerMoveEvent {
     fn add_fields<F: mlua::prelude::LuaUserDataFields<Self>>(fields: &mut F) {
-        fields.add_field_method_get("position", |_, this| Ok(LuaPoint(this.event.location)));
-        fields.add_field_method_get("pointer", |_, this| {
-            Ok(WmInputPointer(this.pointer.clone()))
-        });
+        fields.add_field_method_get("delta", |_, this| Ok(LuaPoint(this.delta)));
+        fields.add_field_method_get("delta_unaccel", |_, this| Ok(LuaPoint(this.delta_unaccel)));
+        fields.add_field_method_get("position", |_, this| Ok(LuaPoint(this.position)));
         fields.add_field_method_get("output_position", |_, this| {
             Ok(this.output_position.map(LuaPoint))
+        });
+        fields.add_field_method_get("pointer", |_, this| {
+            Ok(WmInputPointer(this.pointer.clone()))
         });
     }
 
@@ -112,9 +149,11 @@ impl UserData for LuaPointerMotionEvent {
     }
 }
 
-lua_typedef!(PointerMoveEvent => LuaPointerMotionEvent {
+lua_typedef!(PointerMoveEvent => PointerMoveEvent {
+    let delta: Point;
+    let delta_unaccel: Point;
     let position: Point;
+    let output_position: Option<Point>;
     let pointer: Pointer;
-    let output_position: Nillable<Pointer>;
     fn prevent_default() -> nil;
 });

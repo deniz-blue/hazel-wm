@@ -1,17 +1,21 @@
-use std::error::Error as StdError;
 use smithay::{
     backend::input::{
         AbsolutePositionEvent, Axis, AxisRelativeDirection, ButtonState, Device, Event,
-        InputBackend, PointerAxisEvent, PointerButtonEvent, PointerMotionEvent,
+        InputBackend, PointerAxisEvent, PointerButtonEvent as SmithayPointerButtonEvent,
+        PointerMotionEvent,
     },
     desktop::WindowSurfaceType,
-    input::pointer::{AxisFrame, ButtonEvent, MotionEvent, RelativeMotionEvent},
+    input::pointer::AxisFrame,
     utils::SERIAL_COUNTER,
 };
+use std::error::Error as StdError;
 
 use crate::{
     core::{Hazel, input::pointer::PointerAbsoluteMapping},
-    lua::{api::wm_input_pointer::LuaPointerButtonEvent, ext::LuaErrorExt},
+    lua::{
+        api::wm_input_pointer::{PointerButtonEvent, PointerMoveEvent},
+        ext::LuaErrorExt,
+    },
 };
 
 impl Hazel {
@@ -23,7 +27,7 @@ impl Hazel {
         let button = event.button_code();
         let state = event.state();
         let serial = SERIAL_COUNTER.next_serial();
-        let time = event.time_msec();
+        let utime = event.time();
 
         let (seat, pointer) = self.compositor.get_pointer_handle(&device_id).unwrap();
 
@@ -48,27 +52,23 @@ impl Hazel {
             pressed.retain(|&b| b != button);
         }
 
-        let button_event = ButtonEvent {
+        let event = PointerButtonEvent {
             button,
             state,
             serial,
-            time,
-        };
-
-        pointer.button(self, &button_event);
-
-        pointer.frame(self);
-
-        let event = LuaPointerButtonEvent {
-            event: button_event,
+            utime,
             pointer: pointer.clone(),
             default_prevented: Default::default(),
         };
 
+        pointer.button(self, &event.button_event());
+
+        pointer.frame(self);
+
         self.wm()
             .input
             .events
-            .emit(LuaPointerButtonEvent::name(), event)
+            .emit(PointerButtonEvent::name(), event)
             .into_box()?;
 
         Ok(())
@@ -81,21 +81,30 @@ impl Hazel {
         let device_id = event.device().id();
         let delta = event.delta();
         let delta_unaccel = event.delta_unaccel();
-        let time = event.time();
+        let utime = event.time();
 
         let (_, pointer) = self.compositor.get_pointer_handle(&device_id).unwrap();
 
-        pointer.relative_motion(
-            self,
-            None,
-            &RelativeMotionEvent {
-                delta,
-                delta_unaccel,
-                utime: time,
-            },
-        );
+        let event = PointerMoveEvent {
+            default_prevented: Default::default(),
+            pointer: pointer.clone(),
+            serial: SERIAL_COUNTER.next_serial(),
+            utime,
+            delta,
+            delta_unaccel,
+            output_position: None,
+            position: pointer.current_location() + delta,
+        };
+
+        pointer.relative_motion(self, None, &event.relative_motion());
 
         pointer.frame(self);
+
+        self.wm()
+            .input
+            .events
+            .emit(PointerMoveEvent::name(), event)
+            .into_box()?;
 
         Ok(())
     }
@@ -137,26 +146,34 @@ impl Hazel {
 
         let serial = SERIAL_COUNTER.next_serial();
         let location = event.position_transformed(coordinate_space);
-        let time = event.time_msec();
+        let utime = event.time();
 
         let pointer_over = self.compositor.surface_under(location);
 
-        pointer_handle.motion(
-            self,
-            pointer_over,
-            &MotionEvent {
-                location,
-                serial,
-                time,
-            },
-        );
+        let delta = location - previous_position;
+
+        let event = PointerMoveEvent {
+            default_prevented: Default::default(),
+            pointer: pointer_handle.clone(),
+            delta,
+            delta_unaccel: delta,
+            output_position: Some(location),
+            position: location,
+            serial,
+            utime,
+        };
+
+        pointer_handle.motion(self, pointer_over, &event.motion());
 
         pointer_handle.frame(self);
 
         Ok(())
     }
 
-    pub fn on_pointer_axis<B: InputBackend>(&mut self, event: B::PointerAxisEvent) -> std::result::Result<(), Box<dyn StdError>> {
+    pub fn on_pointer_axis<B: InputBackend>(
+        &mut self,
+        event: B::PointerAxisEvent,
+    ) -> std::result::Result<(), Box<dyn StdError>> {
         let device_id = event.device().id();
 
         let (_, pointer) = self.compositor.get_pointer_handle(&device_id).unwrap();

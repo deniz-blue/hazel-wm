@@ -2,7 +2,7 @@ use crate::lua::{
     api::{
         wm::Wm,
         wm_input::WmInput,
-        wm_input_pointer::{LuaPointerButtonEvent, LuaPointerMotionEvent, WmInputPointer},
+        wm_input_pointer::{PointerButtonEvent, PointerMoveEvent, WmInputPointer},
         wm_input_sym::{LuaKeys, LuaKeysym, LuaMouseButton, LuaMouseButtons},
         wm_outputs::{LuaOutputMode, WmOutputHandle, WmOutputs},
 		wm_input_keyboard::{WmInputKeyboard, KeyboardEvent}
@@ -22,8 +22,8 @@ pub fn dump_typedefs() {
     WmInputPointer::dump();
     LuaMouseButton::dump();
     LuaMouseButtons::dump();
-    LuaPointerButtonEvent::dump();
-    LuaPointerMotionEvent::dump();
+    PointerButtonEvent::dump();
+    PointerMoveEvent::dump();
 
     LuaKeysym::dump();
     LuaKeys::dump();
