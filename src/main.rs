@@ -3,19 +3,16 @@
 pub mod backend;
 pub mod core;
 pub mod lua;
-pub mod err;
 
-use crate::err::IntoDiagnostic;
-use miette::Result;
 use smithay::reexports::calloop::EventLoop;
 
 use crate::backend::Backend;
 use crate::core::{GlobalHazel, Hazel, HazelEventLoop};
 
-fn main() -> Result<()> {
+fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     init_logging();
 
-    let mut event_loop: HazelEventLoop = EventLoop::try_new().into_diagnostic()?;
+    let mut event_loop: HazelEventLoop = EventLoop::try_new().map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
     let mut state = Hazel::new(&mut event_loop)?;
 
     let backend = Backend::new_winit();
@@ -52,7 +49,7 @@ fn main() -> Result<()> {
         hazel.compositor.space.elements().for_each(|window| {
             window.toplevel().unwrap().send_pending_configure();
         });
-    }).into_diagnostic()?;
+    }).map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
 
     Ok(())
 }

@@ -1,7 +1,6 @@
 use std::{cell::Cell, rc::Rc, time::Instant};
 
-use crate::err::IntoDiagnostic;
-use miette::Result;
+use std::error::Error as StdError;
 use smithay::reexports::{
     calloop::{EventLoop, Interest, LoopSignal, Mode, PostAction, generic::Generic},
     wayland_server::{Display, DisplayHandle},
@@ -29,9 +28,9 @@ pub struct Hazel {
 pub type HazelEventLoop<'a> = EventLoop<'a, Hazel>;
 
 impl Hazel {
-    pub fn new(event_loop: &mut HazelEventLoop) -> Result<Self> {
+    pub fn new(event_loop: &mut HazelEventLoop) -> std::result::Result<Self, Box<dyn StdError>> {
         let start_time = std::time::Instant::now();
-        let display = Display::new().into_diagnostic()?;
+        let display = Display::new().map_err(|e| Box::new(e) as Box<dyn StdError>)?;
         let display_handle = display.handle();
         let compositor = HazelCompositor::new(event_loop, &display_handle);
         let lua = HazelLua::new_uninit();
@@ -47,7 +46,8 @@ impl Hazel {
 
                 Ok(PostAction::Continue)
             },
-        ).into_diagnostic()?;
+
+        ).map_err(|e| Box::new(e) as Box<dyn StdError>)?;
 
         lua.listen(event_loop)?;
 
@@ -85,9 +85,9 @@ impl GlobalHazel {
         f(hazel)
     }
 
-    pub fn with<T, F>(f: F) -> Result<T, mlua::Error>
+    pub fn with<T, F>(f: F) -> mlua::Result<T>
     where
-        F: FnOnce(&mut Hazel) -> Result<T, mlua::Error>,
+        F: FnOnce(&mut Hazel) -> mlua::Result<T>,
     {
         HAZEL.with(|cell| {
             if let Some(ptr) = cell.get() {

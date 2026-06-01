@@ -1,7 +1,6 @@
 use std::time::Duration;
 
-use crate::err::IntoDiagnostic;
-use miette::Result;
+use std::error::Error as StdError;
 use smithay::{
     backend::{
         renderer::{
@@ -35,7 +34,7 @@ impl Backend {
         self,
         state: &mut Hazel,
         event_loop: &mut HazelEventLoop,
-    ) -> Result<()> {
+    ) -> std::result::Result<(), Box<dyn StdError>> {
         match self {
             Backend::Winit { mut backend, winit } => {
                 let mode = Mode {
@@ -135,7 +134,7 @@ impl Backend {
                             }
                             _ => (),
                         };
-                    }).into_diagnostic()?;
+                    }).map_err(|e| Box::new(e) as Box<dyn StdError>)?;
 
                 Ok(())
             }

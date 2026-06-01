@@ -1,4 +1,4 @@
-use miette::Result;
+use std::error::Error as StdError;
 use smithay::{
     backend::input::{
         AbsolutePositionEvent, Axis, AxisRelativeDirection, ButtonState, Device, Event,
@@ -18,7 +18,7 @@ impl Hazel {
     pub fn on_pointer_button<B: InputBackend>(
         &mut self,
         event: B::PointerButtonEvent,
-    ) -> Result<()> {
+    ) -> std::result::Result<(), Box<dyn StdError>> {
         let device_id = event.device().id();
         let button = event.button_code();
         let state = event.state();
@@ -69,7 +69,7 @@ impl Hazel {
             .input
             .events
             .emit(LuaPointerButtonEvent::name(), event)
-            .into_miette()?;
+            .into_box()?;
 
         Ok(())
     }
@@ -77,7 +77,7 @@ impl Hazel {
     pub fn on_pointer_motion<B: InputBackend>(
         &mut self,
         event: B::PointerMotionEvent,
-    ) -> Result<()> {
+    ) -> std::result::Result<(), Box<dyn StdError>> {
         let device_id = event.device().id();
         let delta = event.delta();
         let delta_unaccel = event.delta_unaccel();
@@ -103,7 +103,7 @@ impl Hazel {
     pub fn on_pointer_absolute<B: InputBackend>(
         &mut self,
         event: B::PointerMotionAbsoluteEvent,
-    ) -> Result<()> {
+    ) -> std::result::Result<(), Box<dyn StdError>> {
         let device_id = event.device().id();
         let (_, pointer_handle) = self.compositor.get_pointer_handle(&device_id).unwrap();
         let previous_position = pointer_handle.current_location();
@@ -156,7 +156,7 @@ impl Hazel {
         Ok(())
     }
 
-    pub fn on_pointer_axis<B: InputBackend>(&mut self, event: B::PointerAxisEvent) -> Result<()> {
+    pub fn on_pointer_axis<B: InputBackend>(&mut self, event: B::PointerAxisEvent) -> std::result::Result<(), Box<dyn StdError>> {
         let device_id = event.device().id();
 
         let (_, pointer) = self.compositor.get_pointer_handle(&device_id).unwrap();

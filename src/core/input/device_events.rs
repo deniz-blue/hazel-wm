@@ -1,4 +1,4 @@
-use miette::Result;
+use std::error::Error as StdError;
 use smithay::{
     backend::input::{Device, DeviceCapability},
     input::keyboard::XkbConfig,
@@ -7,7 +7,7 @@ use smithay::{
 use crate::core::Hazel;
 
 impl Hazel {
-    pub fn on_device_added(&mut self, device: impl Device) -> Result<()> {
+    pub fn on_device_added(&mut self, device: impl Device) -> std::result::Result<(), Box<dyn StdError>> {
         let id = device.id();
         println!("Device added: {id}");
 
@@ -37,7 +37,7 @@ impl Hazel {
         Ok(())
     }
 
-    pub fn on_device_removed(&mut self, device: impl Device) -> Result<()> {
+    pub fn on_device_removed(&mut self, device: impl Device) -> std::result::Result<(), Box<dyn StdError>> {
         let id = device.id();
         println!("Device removed: {id}");
 

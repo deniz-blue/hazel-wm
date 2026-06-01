@@ -1,9 +1,7 @@
 use std::{path::Path, process::Stdio, rc::Rc};
 
 use calloop_notify::notify::{RecursiveMode, Watcher};
-use crate::err::IntoDiagnostic;
-use miette::Result;
-use mlua::{IntoLua, Lua};
+use mlua::{IntoLua, Lua, Result as LuaResult};
 
 use crate::{
     core::{GlobalHazel, HazelEventLoop},
@@ -23,7 +21,7 @@ impl HazelLua {
         }
     }
 
-    pub fn init(&mut self) -> Result<(), mlua::Error> {
+    pub fn init(&mut self) -> LuaResult<()> {
         self.lua = Lua::new();
         self.wm = Default::default();
 
@@ -38,7 +36,7 @@ impl HazelLua {
         Ok(())
     }
 
-    pub fn init_globals(&self) -> Result<(), mlua::Error> {
+    pub fn init_globals(&self) -> LuaResult<()> {
         let globals = self.lua.globals();
 
         globals.set("wm", self.wm.clone())?;
@@ -98,9 +96,9 @@ impl HazelLua {
     pub fn listen(
         &self,
         event_loop: &mut HazelEventLoop,
-    ) -> Result<()> {
-        let mut notify_source = calloop_notify::NotifySource::new().into_diagnostic()?;
-        notify_source.watch(Path::new("./test"), RecursiveMode::Recursive).into_diagnostic()?;
+    ) -> std::result::Result<(), Box<dyn std::error::Error>> {
+        let mut notify_source = calloop_notify::NotifySource::new().map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
+        notify_source.watch(Path::new("./test"), RecursiveMode::Recursive).map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
         event_loop
             .handle()
             .insert_source(notify_source, move |event, _, state| {
@@ -115,7 +113,7 @@ impl HazelLua {
                         println!("Reloaded Lua");
                     }
                 });
-            }).into_diagnostic()?;
+            }).map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
 
         Ok(())
     }
