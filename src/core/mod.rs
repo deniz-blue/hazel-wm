@@ -1,5 +1,7 @@
 use std::{cell::Cell, rc::Rc, time::Instant};
 
+use crate::err::IntoDiagnostic;
+use miette::Result;
 use smithay::reexports::{
     calloop::{EventLoop, Interest, LoopSignal, Mode, PostAction, generic::Generic},
     wayland_server::{Display, DisplayHandle},
@@ -27,9 +29,9 @@ pub struct Hazel {
 pub type HazelEventLoop<'a> = EventLoop<'a, Hazel>;
 
 impl Hazel {
-    pub fn new(event_loop: &mut HazelEventLoop) -> Result<Self, Box<dyn std::error::Error>> {
+    pub fn new(event_loop: &mut HazelEventLoop) -> Result<Self> {
         let start_time = std::time::Instant::now();
-        let display = Display::new()?;
+        let display = Display::new().into_diagnostic()?;
         let display_handle = display.handle();
         let compositor = HazelCompositor::new(event_loop, &display_handle);
         let lua = HazelLua::new_uninit();
@@ -45,7 +47,7 @@ impl Hazel {
 
                 Ok(PostAction::Continue)
             },
-        )?;
+        ).into_diagnostic()?;
 
         lua.listen(event_loop)?;
 

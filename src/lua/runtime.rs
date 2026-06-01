@@ -1,6 +1,8 @@
 use std::{path::Path, process::Stdio, rc::Rc};
 
 use calloop_notify::notify::{RecursiveMode, Watcher};
+use crate::err::IntoDiagnostic;
+use miette::Result;
 use mlua::{IntoLua, Lua};
 
 use crate::{
@@ -96,9 +98,9 @@ impl HazelLua {
     pub fn listen(
         &self,
         event_loop: &mut HazelEventLoop,
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        let mut notify_source = calloop_notify::NotifySource::new()?;
-        notify_source.watch(Path::new("./test"), RecursiveMode::Recursive)?;
+    ) -> Result<()> {
+        let mut notify_source = calloop_notify::NotifySource::new().into_diagnostic()?;
+        notify_source.watch(Path::new("./test"), RecursiveMode::Recursive).into_diagnostic()?;
         event_loop
             .handle()
             .insert_source(notify_source, move |event, _, state| {
@@ -113,7 +115,7 @@ impl HazelLua {
                         println!("Reloaded Lua");
                     }
                 });
-            })?;
+            }).into_diagnostic()?;
 
         Ok(())
     }

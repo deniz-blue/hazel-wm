@@ -3,7 +3,10 @@
 pub mod backend;
 pub mod core;
 pub mod lua;
+pub mod err;
 
+use crate::err::IntoDiagnostic;
+use miette::Result;
 use smithay::reexports::calloop::EventLoop;
 
 use crate::backend::Backend;
@@ -12,7 +15,7 @@ use crate::core::{GlobalHazel, Hazel, HazelEventLoop};
 fn main() -> Result<()> {
     init_logging();
 
-    let mut event_loop: HazelEventLoop = EventLoop::try_new()?;
+    let mut event_loop: HazelEventLoop = EventLoop::try_new().into_diagnostic()?;
     let mut state = Hazel::new(&mut event_loop)?;
 
     let backend = Backend::new_winit();
@@ -49,7 +52,7 @@ fn main() -> Result<()> {
         hazel.compositor.space.elements().for_each(|window| {
             window.toplevel().unwrap().send_pending_configure();
         });
-    })?;
+    }).into_diagnostic()?;
 
     Ok(())
 }
