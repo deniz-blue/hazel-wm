@@ -2,7 +2,7 @@ use smithay::utils::Logical;
 
 use crate::lua::{
     api::{
-        utils::{LuaPoint, LuaSize}, wm::Wm, wm_input::WmInput, wm_input_keyboard::{KeyboardEvent, ModifiersStateUserData, WmInputKeyboard}, wm_input_pointer::{PointerButtonEvent, PointerMoveEvent, WmInputPointer}, wm_input_sym::{LuaKeys, LuaKeysym, LuaMouseButton, LuaMouseButtons}, wm_outputs::{LuaOutputMode, WmOutputHandle, WmOutputs}
+        utils::{LuaPoint, LuaSize}, wm::Wm, wm_input::WmInput, wm_input_keyboard::{KeyEvent, ModifiersStateUserData, WmInputKeyboard}, wm_input_pointer::{PointerButtonEvent, PointerMoveEvent, WmInputPointer}, wm_input_sym::{LuaKeys, LuaKeysym, LuaMouseButton, LuaMouseButtons}, wm_outputs::{LuaOutputMode, WmOutputHandle, WmOutputs}
     },
     typedefs::LuaTypeDef,
 };
@@ -36,7 +36,7 @@ pub fn dump_typedefs() {
     LuaKeysym::dump();
     LuaKeys::dump();
     WmInputKeyboard::dump();
-    KeyboardEvent::dump();
+    KeyEvent::dump();
 	ModifiersStateUserData::dump();
 
     LuaOutputMode::dump();

@@ -1,6 +1,9 @@
 print("Meowing on " .. wm.name)
 
--- wm.input.keyboard:set_layout("tr")
+wm.input:on("new_keyboard", function(keyboard)
+	print("New keyboard added!")
+	keyboard:set_layout("tr")
+end)
 
 wm:on("ready", function()
 	print("WM is ready!")

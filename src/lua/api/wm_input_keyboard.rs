@@ -52,7 +52,7 @@ lua_typedef!(Keyboard => WmInputKeyboard {
 });
 
 #[derive(Clone, Debug)]
-pub struct KeyboardEvent {
+pub struct KeyEvent {
     pub keycode: Keycode,
     pub keysym: Keysym,
     pub keysyms: Vec<Keysym>,
@@ -63,7 +63,7 @@ pub struct KeyboardEvent {
     pub default_prevented: Rc<RefCell<bool>>,
 }
 
-impl KeyboardEvent {
+impl KeyEvent {
     pub fn name() -> String {
         String::from("key")
     }
@@ -77,7 +77,7 @@ impl KeyboardEvent {
     }
 }
 
-impl UserData for KeyboardEvent {
+impl UserData for KeyEvent {
     fn add_fields<F: mlua::prelude::LuaUserDataFields<Self>>(fields: &mut F) {
         fields.add_field_method_get("state", |_, this| Ok(format!("{:?}", this.state)));
         fields.add_field_method_get("serial", |_, this| Ok(Into::<u32>::into(this.serial)));
@@ -104,14 +104,14 @@ impl UserData for KeyboardEvent {
     }
 }
 
-lua_typedef!(KeyboardEvent => KeyboardEvent {
+lua_typedef!(KeyEvent => KeyEvent {
     let state: string;
     let serial: number;
     let time: number;
     let keycode: number;
     let key: Keysym;
     let keys: Array<Keysym>;
-    let modifiers: ModifiersState;
+    let modifiers: Modifiers;
     fn prevent_default() -> nil;
 });
 
@@ -129,7 +129,7 @@ impl UserData for ModifiersStateUserData {
     }
 }
 
-lua_typedef!(ModifiersState => ModifiersStateUserData {
+lua_typedef!(Modifiers => ModifiersStateUserData {
     let shift: boolean;
     let ctrl: boolean;
     let alt: boolean;

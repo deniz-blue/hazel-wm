@@ -5,7 +5,7 @@ use smithay::{
     utils::SERIAL_COUNTER,
 };
 
-use crate::{core::Hazel, lua::api::wm_input_keyboard::KeyboardEvent};
+use crate::{core::Hazel, lua::api::wm_input_keyboard::KeyEvent};
 
 impl Hazel {
     pub fn on_keyboard_key<B: InputBackend>(&mut self, event: B::KeyboardKeyEvent) -> std::result::Result<(), Box<dyn StdError>> {
@@ -24,7 +24,7 @@ impl Hazel {
             serial,
             time,
             move |hazel, modifiers, kh| {
-                let event = KeyboardEvent {
+                let event = KeyEvent {
                     keycode,
                     keysym: kh.modified_sym(),
                     keysyms: kh.modified_syms(),
@@ -39,7 +39,7 @@ impl Hazel {
                     .wm()
                     .input
                     .events
-                    .emit(KeyboardEvent::name(), event.clone())
+                    .emit(KeyEvent::name(), event.clone())
                     .expect("Oops");
 
                 if event.default_prevented.take() {

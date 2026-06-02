@@ -18,7 +18,9 @@ impl UserData for WmInput {
 }
 
 lua_typedef!(WmInput => WmInput {
-    use key => KeyboardEvent;
+    use key => KeyEvent;
     use pointer_move => PointerMoveEvent;
     use pointer_button => PointerButtonEvent;
+	use new_keyboard => Keyboard;
+	use new_pointer => Pointer;
 });

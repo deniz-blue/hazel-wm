@@ -37,7 +37,7 @@ function Wm:on(event, callback) end
 local WmInput = {}
 
 --- @param event "key"
---- @param callback fun(e: KeyboardEvent)
+--- @param callback fun(e: KeyEvent)
 function WmInput:on(event, callback) end
 
 --- @param event "pointer_move"
@@ -46,6 +46,14 @@ function WmInput:on(event, callback) end
 
 --- @param event "pointer_button"
 --- @param callback fun(e: PointerButtonEvent)
+function WmInput:on(event, callback) end
+
+--- @param event "new_keyboard"
+--- @param callback fun(e: Keyboard)
+function WmInput:on(event, callback) end
+
+--- @param event "new_pointer"
+--- @param callback fun(e: Pointer)
 function WmInput:on(event, callback) end
 
 --- @class WmOutputs
@@ -111,20 +119,20 @@ function Keyboard:get_layout() end
 --- @return boolean
 function Keyboard:set_layout(keymap) end
 
---- @class KeyboardEvent
+--- @class KeyEvent
 --- @field state string
 --- @field serial number
 --- @field time number
 --- @field keycode number
 --- @field key Keysym
 --- @field keys Array<Keysym>
---- @field modifiers ModifiersState
-local KeyboardEvent = {}
+--- @field modifiers Modifiers
+local KeyEvent = {}
 
 --- @return nil
-function KeyboardEvent:prevent_default() end
+function KeyEvent:prevent_default() end
 
---- @class ModifiersState
+--- @class Modifiers
 --- @field shift boolean
 --- @field ctrl boolean
 --- @field alt boolean
@@ -132,7 +140,7 @@ function KeyboardEvent:prevent_default() end
 --- @field caps_lock boolean
 --- @field num_lock boolean
 --- @field altgr boolean
-local ModifiersState = {}
+local Modifiers = {}
 
 --- @class OutputMode
 --- @field size Size
