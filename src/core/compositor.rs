@@ -28,7 +28,8 @@ pub struct HazelCompositor {
     pub seats: HashMap<String, Seat<Hazel>>,
     pub device_to_seat: HashMap<String, String>,
 	pub pointer_pressed: HashMap<PointerHandle<Hazel>, Vec<u32>>,
-    pub pointer_mapping: HashMap<String, PointerAbsoluteMapping>,
+    pub pointer_mapping: HashMap<PointerHandle<Hazel>, PointerAbsoluteMapping>,
+    pub pointer_absolute_previous: HashMap<PointerHandle<Hazel>, Point<f64, Logical>>,
 }
 
 pub struct HazelSmithay {
@@ -76,6 +77,7 @@ impl HazelCompositor {
             device_to_seat: HashMap::new(),
             pointer_mapping: HashMap::new(),
 			pointer_pressed: HashMap::new(),
+            pointer_absolute_previous: HashMap::new(),
         }
     }
 

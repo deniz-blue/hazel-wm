@@ -115,19 +115,25 @@ impl Hazel {
     ) -> std::result::Result<(), Box<dyn StdError>> {
         let device_id = event.device().id();
         let (_, pointer_handle) = self.compositor.get_pointer_handle(&device_id).unwrap();
-        let previous_position = pointer_handle.current_location();
+
+        let previous_output_position = self
+            .compositor
+            .pointer_absolute_previous
+			.get(&pointer_handle)
+			.cloned()
+			.unwrap_or_else(|| pointer_handle.current_location());
 
         let mapping = self
             .compositor
             .pointer_mapping
-            .get(&device_id)
+            .get(&pointer_handle)
             .unwrap_or(&PointerAbsoluteMapping::FirstContainingOutput);
 
         let coordinate_space = match mapping {
             PointerAbsoluteMapping::FirstContainingOutput => self
                 .compositor
                 .space
-                .output_under(previous_position)
+                .output_under(pointer_handle.current_location())
                 .next()
                 .or_else(|| self.compositor.space.outputs().next())
                 .and_then(|o| self.compositor.space.output_geometry(o))
@@ -144,12 +150,16 @@ impl Hazel {
 
         let serial = SERIAL_COUNTER.next_serial();
         let location_output = event.position_transformed(coordinate_space.size);
-		let location = location_output + coordinate_space.loc.to_f64();
+        let location = location_output + coordinate_space.loc.to_f64();
         let utime = event.time();
 
         let pointer_over = self.compositor.surface_under(location);
 
-        let delta = location - previous_position;
+        let delta = location_output - previous_output_position;
+
+		self.compositor
+			.pointer_absolute_previous
+			.insert(pointer_handle.clone(), location_output);
 
         let event = PointerMoveEvent {
             default_prevented: Default::default(),
@@ -162,12 +172,12 @@ impl Hazel {
             utime,
         };
 
-		self.wm()
-			.input
-			.events
-			.emit(PointerMoveEvent::name(), event.clone())
-			.into_box()?;
-	
+        self.wm()
+            .input
+            .events
+            .emit(PointerMoveEvent::name(), event.clone())
+            .into_box()?;
+
         pointer_handle.motion(self, pointer_over, &event.motion());
 
         pointer_handle.frame(self);
