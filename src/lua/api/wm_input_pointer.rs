@@ -9,7 +9,7 @@ use smithay::{
 
 use crate::{
     core::{GlobalHazel, Hazel},
-    lua::api::{utils::LuaPoint, wm_input_sym::LuaMouseButton},
+    lua::api::{utils::LuaPoint, wm_input_sym::LuaMouseButton, wm_windows::WmWindow},
     lua_typedef,
 };
 
@@ -21,7 +21,7 @@ impl WmInputPointer {
     }
 
     pub fn buttons(&self) -> Result<Vec<u32>, mlua::Error> {
-        GlobalHazel::with(|hazel| {
+        GlobalHazel::try_with(|hazel| {
             Ok(hazel
                 .compositor
                 .pointer_pressed
@@ -36,12 +36,21 @@ impl UserData for WmInputPointer {
     fn add_methods<M: mlua::prelude::LuaUserDataMethods<Self>>(methods: &mut M) {
         methods.add_method("position", |_, this, _: ()| this.position());
         methods.add_method("buttons", |_, this, _: ()| this.buttons());
+        methods.add_method("window_under", |_, this, _: ()| {
+            GlobalHazel::with(|hazel| {
+                Ok(hazel
+                    .compositor
+                    .window_under(this.0.current_location())
+                    .map(|(window, _)| WmWindow(window.clone())))
+            })
+        });
     }
 }
 
 lua_typedef!(Pointer => WmInputPointer {
     fn position() -> Point;
     fn buttons() -> table<MouseButton>;
+    fn window_under() -> Option<Window>;
 });
 
 pub struct PointerButtonEvent {

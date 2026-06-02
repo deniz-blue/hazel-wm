@@ -57,7 +57,7 @@ impl LuaEventHandler {
     }
 
     pub fn emit<A: IntoLuaMulti>(&self, event_name: String, args: A) -> Result<(), mlua::Error> {
-        GlobalHazel::with(|hazel| self.emit_with(&hazel.lua.lua, event_name, args))
+        GlobalHazel::try_with(|hazel| self.emit_with(&hazel.lua.lua, event_name, args))
     }
 }
 

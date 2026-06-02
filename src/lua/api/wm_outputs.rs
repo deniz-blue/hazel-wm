@@ -1,7 +1,10 @@
 use std::collections::HashMap;
 
 use mlua::{IntoLua, MetaMethod, UserData, Value};
-use smithay::output::{Mode, WeakOutput};
+use smithay::{
+    output::{Mode, WeakOutput},
+    utils::Logical,
+};
 
 use crate::{
     core::GlobalHazel,
@@ -25,11 +28,11 @@ impl UserData for WmOutputs {
         impl_lua_event_handler!(methods);
 
         methods.add_method("count", |_, _, _: ()| {
-            GlobalHazel::with(|hazel| Ok(hazel.compositor.space.outputs().count()))
+            GlobalHazel::try_with(|hazel| Ok(hazel.compositor.space.outputs().count()))
         });
 
         methods.add_method("name", |_, _, name: String| {
-            GlobalHazel::with(|hazel| {
+            GlobalHazel::try_with(|hazel| {
                 let output = hazel
                     .compositor
                     .space
@@ -42,7 +45,7 @@ impl UserData for WmOutputs {
         });
 
         methods.add_meta_method(MetaMethod::Pairs, |lua, _, (): ()| {
-            let vec: Vec<_> = GlobalHazel::with(|hazel| {
+            let vec: Vec<_> = GlobalHazel::try_with(|hazel| {
                 Ok(hazel
                     .compositor
                     .space
@@ -81,19 +84,40 @@ lua_typedef!(WmOutputs => WmOutputs {
 
 pub struct WmOutputHandle(WeakOutput);
 
-impl WmOutputHandle {}
+impl WmOutputHandle {
+    pub fn name(&self) -> Option<String> {
+        self.0.upgrade().map(|o| o.name())
+    }
+
+    pub fn description(&self) -> Option<String> {
+        self.0.upgrade().map(|o| o.description())
+    }
+
+    pub fn current_mode(&self) -> Option<LuaOutputMode> {
+        self.0
+            .upgrade()
+            .and_then(|o| o.current_mode().map(LuaOutputMode))
+    }
+
+    pub fn position(&self) -> Option<LuaPoint<i32, Logical>> {
+        self.0.upgrade().map(|o| LuaPoint(o.current_location()))
+    }
+
+    pub fn set_position(&self, point: LuaPoint<f64, Logical>) {
+        if let Some(output) = self.0.upgrade() {
+            output.change_current_state(None, None, None, Some(point.0.to_i32_round()));
+            GlobalHazel::with(|hazel| {
+                hazel.compositor.space.map_output(&output, point.0.to_i32_round());
+            })
+        }
+    }
+}
 
 impl UserData for WmOutputHandle {
     fn add_fields<F: mlua::prelude::LuaUserDataFields<Self>>(fields: &mut F) {
         fields.add_field_method_get("name", |_, this| Ok(this.0.upgrade().map(|o| o.name())));
         fields.add_field_method_get("description", |_, this| {
             Ok(this.0.upgrade().map(|o| o.description()))
-        });
-        fields.add_field_method_get("mode", |_, this| {
-            Ok(this
-                .0
-                .upgrade()
-                .map(|o| o.current_mode().map(LuaOutputMode)))
         });
         fields.add_field_method_get("properties", |lua, this| {
             this.0
@@ -116,18 +140,13 @@ impl UserData for WmOutputHandle {
     }
 
     fn add_methods<M: mlua::prelude::LuaUserDataMethods<Self>>(methods: &mut M) {
-        methods.add_method("position", |_, this, _: ()| {
-            Ok(this.0.upgrade().map(|o| LuaPoint(o.current_location())))
+        methods.add_method("position", |_, this, _: ()| Ok(this.position()));
+        methods.add_method("set_position", |_, this, point: LuaPoint<_, _>| {
+            Ok(this.set_position(point))
         });
-        methods.add_method("set_position", |_, this, point: LuaPoint<f64, _>| {
-            if let Some(output) = this.0.upgrade() {
-                output.change_current_state(None, None, None, Some(point.0.to_i32_round()));
-                GlobalHazel::with(|hazel| {
-                    hazel.compositor.space.map_output(&output, point.0.to_i32_round());
-                    Ok(())
-                })?;
-            }
-            Ok(())
+        methods.add_method("mode", |_, this, _: ()| Ok(this.current_mode()));
+        methods.add_method("size", |_, this, _: ()| {
+            Ok(this.current_mode().map(|mode| LuaSize(mode.0.size)))
         });
     }
 }
@@ -135,10 +154,11 @@ impl UserData for WmOutputHandle {
 lua_typedef!(WmOutput => WmOutputHandle {
     let name: string;
     let description: string;
-    let mode: OutputMode;
     let properties: table;
+    fn mode() -> OutputMode;
     fn position() -> Point;
     fn set_position(point: Point) -> nil;
+    fn size() -> Size;
 });
 
 pub struct LuaOutputMode(Mode);

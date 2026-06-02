@@ -1,6 +1,5 @@
 use smithay::{
     desktop::{PopupKind, PopupManager, Space, Window},
-    input::{Seat, pointer::GrabStartData as PointerGrabStartData},
     reexports::wayland_server::{
         Resource,
         protocol::{wl_seat, wl_surface::WlSurface},
@@ -15,7 +14,7 @@ use smithay::{
     },
 };
 
-use crate::core::Hazel;
+use crate::{core::Hazel, lua::api::wm_windows::WmWindow};
 
 impl XdgShellHandler for Hazel {
     fn xdg_shell_state(&mut self) -> &mut XdgShellState {
@@ -25,13 +24,24 @@ impl XdgShellHandler for Hazel {
     fn new_toplevel(&mut self, surface: ToplevelSurface) {
         let window = Window::new_wayland_window(surface);
 
-		println!("New toplevel: {:?}", window.toplevel().unwrap().wl_surface().id());
+        println!(
+            "New toplevel: {:?}",
+            window.toplevel().unwrap().wl_surface().id()
+        );
 
-        self.compositor.space.map_element(window, (0, 0), false);
+        self.compositor
+            .space
+            .map_element(window.clone(), (0, 0), false);
+
+        self.wm()
+            .windows
+            .events
+            .emit(String::from("new_window"), WmWindow(window))
+            .expect("Failed to emit new_window event");
     }
 
     fn new_popup(&mut self, surface: PopupSurface, _positioner: PositionerState) {
-		println!("New popup: {:?}", surface.wl_surface().id());
+        println!("New popup: {:?}", surface.wl_surface().id());
 
         // self.compositor.unconstrain_popup(&surface);
         let _ = self
@@ -47,7 +57,10 @@ impl XdgShellHandler for Hazel {
         positioner: PositionerState,
         token: u32,
     ) {
-		println!("Reposition request for popup: {:?}", surface.wl_surface().id());
+        println!(
+            "Reposition request for popup: {:?}",
+            surface.wl_surface().id()
+        );
         surface.with_pending_state(|state| {
             let geometry = positioner.get_geometry();
             state.geometry = geometry;
@@ -126,29 +139,6 @@ impl XdgShellHandler for Hazel {
     fn grab(&mut self, _surface: PopupSurface, _seat: wl_seat::WlSeat, _serial: Serial) {
         // TODO popup grabs
     }
-}
-
-fn check_grab(
-    seat: &Seat<Hazel>,
-    surface: &WlSurface,
-    serial: Serial,
-) -> Option<PointerGrabStartData<Hazel>> {
-    let pointer = seat.get_pointer()?;
-
-    // Check that this surface has a click grab.
-    if !pointer.has_grab(serial) {
-        return None;
-    }
-
-    let start_data = pointer.grab_start_data()?;
-
-    let (focus, _) = start_data.focus.as_ref()?;
-    // If the focus was for a different surface, ignore the request.
-    if !focus.id().same_client_as(&surface.id()) {
-        return None;
-    }
-
-    Some(start_data)
 }
 
 /// Should be called on `WlSurface::commit`

@@ -34,7 +34,7 @@ impl UserData for Wm {
         impl_lua_event_handler!(methods);
 
         methods.add_method("quit", |_, _this, ()| {
-            GlobalHazel::with(|hazel| Ok(hazel.loop_signal.stop()))
+            GlobalHazel::try_with(|hazel| Ok(hazel.loop_signal.stop()))
         });
     }
 }

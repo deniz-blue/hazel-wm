@@ -35,7 +35,10 @@ wm.input:on("key", function(e)
 
 	local delta = deltamap[tostring(e.key)]
 
-	print("Modifiers: " .. (e.modifiers.alt and "Alt " or "") .. (e.modifiers.shift and "Shift " or "") .. (e.modifiers.ctrl and "Ctrl " or "") .. (e.modifiers.logo and "Logo " or ""))
+	print("Modifiers: " ..
+		(e.modifiers.alt and "Alt " or "") ..
+		(e.modifiers.shift and "Shift " or "") ..
+		(e.modifiers.ctrl and "Ctrl " or "") .. (e.modifiers.logo and "Logo " or ""))
 
 	if e.modifiers.alt and delta then
 		e:prevent_default()
@@ -55,32 +58,33 @@ wm.input:on("key", function(e)
 end)
 
 wm.input:on("pointer_move", function(e)
-	-- print("Pointer moved to " .. e.position.x .. ", " .. e.position.y .. " with delta " .. e.delta.x .. ", " .. e.delta.y)
-
-	-- lets try adding output dragging with mb1 + mouse move
-
+	-- print("Pointer moved: " .. e.delta.x .. ", " .. e.delta.y)
 	if e.pointer:buttons() then
-		print("Pointer buttons: " .. table.concat(e.pointer:buttons()))
-
 		if e.pointer:buttons()[1] then
-			print("Dragging output")
-			local output = wm.outputs:name("winit")
-			if not output then
-				print("Output not found")
-				return
+			local window = e.pointer:window_under()
+			if window then
+				local pos = window:position()
+				window:set_position({
+					x = pos.x + e.delta.x,
+					y = pos.y + e.delta.y
+				})
+			else
+				local output = wm.outputs:name("winit")
+				if not output then return end
+				local pos = output:position()
+				output:set_position({
+					x = pos.x - e.delta.x,
+					y = pos.y - e.delta.y
+				})
 			end
-			local pos = output:position()
-			print("Moving Output: " .. pos.x .. ", " .. pos.y .. " with delta " .. e.delta.x .. ", " .. e.delta.y)
-			output:set_position({
-				x = pos.x - e.delta.x,
-				y = pos.y - e.delta.y
-			})
 		end
 	end
 end)
 
-wm.input:on("pointer_button", function(e)
-	
+wm.windows:on("new_window", function(window)
+	print("New window added!")
+
+	-- window:set_position({ x = 100, y = 100 })
 end)
 
 -- wm.outputs.winit:move({ x = -200, y = -200 })

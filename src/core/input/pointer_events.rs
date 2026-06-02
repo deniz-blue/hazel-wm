@@ -4,7 +4,6 @@ use smithay::{
         InputBackend, PointerAxisEvent, PointerButtonEvent as SmithayPointerButtonEvent,
         PointerMotionEvent,
     },
-    desktop::WindowSurfaceType,
     input::pointer::AxisFrame,
     utils::SERIAL_COUNTER,
 };
@@ -31,9 +30,11 @@ impl Hazel {
 
         let (seat, pointer) = self.compositor.get_pointer_handle(&device_id).unwrap();
 
-        if let Some((window, p)) = self.compositor.window_under(pointer.current_location()) {
-            let surface = window.surface_under(p.to_f64(), WindowSurfaceType::all());
-            if let (Some((surface, _)), Some(keyboard)) = (surface, seat.get_keyboard()) {
+        if let Some((window, surface, _)) =
+            self.compositor.surface_under(pointer.current_location())
+        {
+            self.compositor.space.raise_element(&window, true);
+            if let Some(keyboard) = seat.get_keyboard() {
                 keyboard.set_focus(self, Some(surface), serial);
             }
         } else if let Some(keyboard) = seat.get_keyboard() {
@@ -119,9 +120,9 @@ impl Hazel {
         let previous_output_position = self
             .compositor
             .pointer_absolute_previous
-			.get(&pointer_handle)
-			.cloned()
-			.unwrap_or_else(|| pointer_handle.current_location());
+            .get(&pointer_handle)
+            .cloned()
+            .unwrap_or_else(|| pointer_handle.current_location());
 
         let mapping = self
             .compositor
@@ -153,13 +154,13 @@ impl Hazel {
         let location = location_output + coordinate_space.loc.to_f64();
         let utime = event.time();
 
-        let pointer_over = self.compositor.surface_under(location);
+        let under = self.compositor.surface_under(location);
 
         let delta = location_output - previous_output_position;
 
-		self.compositor
-			.pointer_absolute_previous
-			.insert(pointer_handle.clone(), location_output);
+        self.compositor
+            .pointer_absolute_previous
+            .insert(pointer_handle.clone(), location_output);
 
         let event = PointerMoveEvent {
             default_prevented: Default::default(),
@@ -172,15 +173,19 @@ impl Hazel {
             utime,
         };
 
+        pointer_handle.motion(
+            self,
+            under.map(|(_, surface, point)| (surface, point)),
+            &event.motion(),
+        );
+
+        pointer_handle.frame(self);
+
         self.wm()
             .input
             .events
             .emit(PointerMoveEvent::name(), event.clone())
             .into_box()?;
-
-        pointer_handle.motion(self, pointer_over, &event.motion());
-
-        pointer_handle.frame(self);
 
         Ok(())
     }

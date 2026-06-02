@@ -8,6 +8,7 @@ Key = {}
 
 ---@type table<string, MouseButton>
 Button = {}
+
 --- @class Point
 --- @field x number
 --- @field y number
@@ -74,6 +75,9 @@ function Pointer:position() end
 
 --- @return table<MouseButton>
 function Pointer:buttons() end
+
+--- @return Option<Window>
+function Pointer:window_under() end
 
 --- @class MouseButton
 local MouseButton = {}
@@ -150,9 +154,11 @@ local OutputMode = {}
 --- @class WmOutput
 --- @field name string
 --- @field description string
---- @field mode OutputMode
 --- @field properties table
 local WmOutput = {}
+
+--- @return OutputMode
+function WmOutput:mode() end
 
 --- @return Point
 function WmOutput:position() end
@@ -160,6 +166,33 @@ function WmOutput:position() end
 --- @param point Point
 --- @return nil
 function WmOutput:set_position(point) end
+
+--- @return Size
+function WmOutput:size() end
+
+--- @class WmWindows
+local WmWindows = {}
+
+--- @param event "new_window"
+--- @param callback fun(e: Window)
+function WmWindows:on(event, callback) end
+
+--- @class Window
+local Window = {}
+
+--- @return Point
+function Window:position() end
+
+--- @param position Point
+--- @return nil
+function Window:set_position(position) end
+
+--- @return Size
+function Window:size() end
+
+--- @param size Size
+--- @return nil
+function Window:set_size(size) end
 
 ---@param command string
 function spawn(command) end

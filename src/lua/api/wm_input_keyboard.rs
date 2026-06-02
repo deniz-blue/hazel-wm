@@ -18,7 +18,7 @@ pub struct WmInputKeyboard(pub KeyboardHandle<Hazel>);
 impl UserData for WmInputKeyboard {
     fn add_methods<M: mlua::prelude::LuaUserDataMethods<Self>>(methods: &mut M) {
         methods.add_method("get_layout", |_, this, _: ()| {
-            GlobalHazel::with(|hazel| {
+            GlobalHazel::try_with(|hazel| {
                 Ok(this.0.with_xkb_state(hazel, |k| {
                     let state = k.xkb().lock().unwrap();
                     state.layout_name(state.active_layout()).to_owned()
@@ -27,7 +27,7 @@ impl UserData for WmInputKeyboard {
         });
 
         methods.add_method("set_layout", |_, this, keymap: String| {
-            GlobalHazel::with(|hazel| {
+            GlobalHazel::try_with(|hazel| {
                 let result = this.0.set_xkb_config(
                     hazel,
                     XkbConfig {

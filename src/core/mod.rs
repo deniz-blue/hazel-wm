@@ -1,10 +1,10 @@
 use std::{cell::Cell, rc::Rc, time::Instant};
 
-use std::error::Error as StdError;
 use smithay::reexports::{
     calloop::{EventLoop, Interest, LoopSignal, Mode, PostAction, generic::Generic},
     wayland_server::{Display, DisplayHandle},
 };
+use std::error::Error as StdError;
 
 use crate::{
     core::compositor::HazelCompositor,
@@ -36,18 +36,20 @@ impl Hazel {
         let lua = HazelLua::new_uninit();
         let loop_signal = event_loop.get_signal();
 
-        event_loop.handle().insert_source(
-            Generic::new(display, Interest::READ, Mode::Level),
-            |_, display, state| {
-                GlobalHazel::execute(state, |hazel| {
-                    // Safety: we don't drop the display
-                    unsafe { display.get_mut().dispatch_clients(hazel) }
-                })?;
+        event_loop
+            .handle()
+            .insert_source(
+                Generic::new(display, Interest::READ, Mode::Level),
+                |_, display, state| {
+                    GlobalHazel::execute(state, |hazel| {
+                        // Safety: we don't drop the display
+                        unsafe { display.get_mut().dispatch_clients(hazel) }
+                    })?;
 
-                Ok(PostAction::Continue)
-            },
-
-        ).map_err(|e| Box::new(e) as Box<dyn StdError>)?;
+                    Ok(PostAction::Continue)
+                },
+            )
+            .map_err(|e| Box::new(e) as Box<dyn StdError>)?;
 
         lua.listen(event_loop)?;
 
@@ -85,7 +87,15 @@ impl GlobalHazel {
         f(hazel)
     }
 
-    pub fn with<T, F>(f: F) -> mlua::Result<T>
+    pub fn with<T>(f: impl FnOnce(&mut Hazel) -> T) -> T {
+        HAZEL.with(|cell| {
+            let ptr = cell.get().expect("Expected GlobalHazel to be set");
+            let hazel = unsafe { &mut *ptr };
+            f(hazel)
+        })
+    }
+
+    pub fn try_with<T, F>(f: F) -> mlua::Result<T>
     where
         F: FnOnce(&mut Hazel) -> mlua::Result<T>,
     {
@@ -101,4 +111,11 @@ impl GlobalHazel {
             }
         })
     }
+}
+
+#[macro_export]
+macro_rules! with_hazel {
+    ($var:ident => $expr:expr) => {
+        $crate::core::GlobalHazel::with(|$var| $expr)
+    };
 }
