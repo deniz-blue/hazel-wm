@@ -8,6 +8,7 @@ macro_rules! lua_typedef {
     (
         $class:ident => $impl_into:ty {
 			$( extern $global:ident ; )*
+            $( fn( $($staticparam:ident : $staticparam_tt:tt),* $(,)? ) -> $staticret:ty ; )*
             $( let $field:ident : $field_ty:ty ; )*
             $( use $name:ident => $type:ty ; )*
             $( fn $method:ident ( $($param:ident : $param_tt:tt),* $(,)? ) -> $ret:ty ; )*
@@ -23,7 +24,26 @@ macro_rules! lua_typedef {
 				$(
 					println!("--- @field {} {}", stringify!($field), stringify!($field_ty));
 				)*
-				println!("local {} = {{}}\n", stringify!($class));
+
+				if stringify!($($staticret)*).len() > 0 {
+					$(
+						$(
+							println!("--- @param {} {}", stringify!($staticparam), stringify!($staticparam_tt));
+						)*
+						println!("--- @return {}", stringify!($class));
+						print!("function {}(", stringify!($class));
+
+						let mut _first = true;
+						$(
+							if !_first { print!(", "); }
+							print!("{}", stringify!($staticparam));
+							_first = false;
+						)*
+						println!(") end\n");
+					)*
+				} else {
+					println!("local {} = {{}}\n", stringify!($class));
+				}
 
 				$(
 					println!("{} = {}", stringify!($global), stringify!($class));

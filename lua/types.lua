@@ -12,7 +12,20 @@ Button = {}
 --- @class Point
 --- @field x number
 --- @field y number
-local Point = {}
+--- @param new Point
+--- @return Point
+function Point(new) end
+
+--- @class Point
+--- @param x number
+--- @param y number
+--- @return Point
+function Point(x, y) end
+
+--- @class Point
+--- @param other Point
+--- @return nil
+function Point:add(other) end
 
 --- @class Size
 --- @field width number
@@ -62,6 +75,16 @@ function WmInput:on(event, callback) end
 --- @param callback fun(e: Pointer)
 function WmInput:on(event, callback) end
 
+--- @class WmSeats
+local WmSeats = {}
+
+--- @return integer
+function WmSeats:count() end
+
+--- @param name string
+--- @return Option<Seat>
+function WmSeats:get(name) end
+
 --- @class WmOutputs
 local WmOutputs = {}
 
@@ -71,6 +94,16 @@ function WmOutputs:count() end
 --- @param name string
 --- @return WmOutput
 function WmOutputs:name(name) end
+
+--- @class Seat
+--- @field name string
+local Seat = {}
+
+--- @return Option<Pointer>
+function Seat:pointer() end
+
+--- @return Option<Keyboard>
+function Seat:keyboard() end
 
 --- @class Pointer
 local Pointer = {}

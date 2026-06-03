@@ -5,7 +5,11 @@ use mlua::{IntoLua, Lua, Result as LuaResult};
 
 use crate::{
     core::{GlobalHazel, HazelEventLoop},
-    lua::api::{wm::Wm, wm_input_sym::LuaKeys},
+    lua::api::{
+        utils::LuaPoint,
+        wm::Wm,
+        wm_input_sym::{LuaKeys, LuaMouseButtons},
+    },
 };
 
 pub struct HazelLua {
@@ -42,6 +46,9 @@ impl HazelLua {
         globals.set("wm", self.wm.clone())?;
 
         globals.set("Key", LuaKeys)?;
+        globals.set("Button", LuaMouseButtons)?;
+
+        globals.set("Point", LuaPoint::<f64, _>::create_ctor(&self.lua)?)?;
 
         globals.set(
             "spawn",
@@ -97,8 +104,11 @@ impl HazelLua {
         &self,
         event_loop: &mut HazelEventLoop,
     ) -> std::result::Result<(), Box<dyn std::error::Error>> {
-        let mut notify_source = calloop_notify::NotifySource::new().map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
-        notify_source.watch(Path::new("./test"), RecursiveMode::Recursive).map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
+        let mut notify_source = calloop_notify::NotifySource::new()
+            .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
+        notify_source
+            .watch(Path::new("./test"), RecursiveMode::Recursive)
+            .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
         event_loop
             .handle()
             .insert_source(notify_source, move |event, _, state| {
@@ -113,7 +123,8 @@ impl HazelLua {
                         println!("Reloaded Lua");
                     }
                 });
-            }).map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
+            })
+            .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
 
         Ok(())
     }
