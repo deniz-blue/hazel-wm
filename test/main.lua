@@ -57,8 +57,9 @@ wm.input:on("key", function(e)
 	end
 end)
 
+local output_velocity = { x = 0, y = 0 }
+
 wm.input:on("pointer_move", function(e)
-	-- print("Pointer moved: " .. e.delta.x .. ", " .. e.delta.y)
 	if e.pointer:buttons() then
 		if e.pointer:buttons()[1] then
 			local window = e.pointer:window_under()
@@ -69,15 +70,25 @@ wm.input:on("pointer_move", function(e)
 					y = pos.y + e.delta.y
 				})
 			else
-				local output = wm.outputs:name("winit")
-				if not output then return end
-				local pos = output:position()
-				output:set_position({
-					x = pos.x - e.delta.x,
-					y = pos.y - e.delta.y
-				})
+				output_velocity.x = output_velocity.x + e.delta.x
+				output_velocity.y = output_velocity.y + e.delta.y
 			end
 		end
+	end
+end)
+
+wm:on("tick", function()
+	if output_velocity.x ~= 0 or output_velocity.y ~= 0 then
+		local output = wm.outputs:name("winit")
+		if output then
+			local pos = output:position()
+			output:set_position({
+				x = pos.x - output_velocity.x,
+				y = pos.y - output_velocity.y
+			})
+		end
+		output_velocity.x = output_velocity.x * 0.9
+		output_velocity.y = output_velocity.y * 0.9
 	end
 end)
 

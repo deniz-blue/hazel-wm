@@ -87,6 +87,19 @@ impl Hazel {
         }
 
         self.compositor.device_to_seat.remove(&id);
+
+        self.compositor.seats.retain(|seat_name, seat| {
+            let has_keyboard = seat.get_keyboard().is_some();
+            let has_pointer = seat.get_pointer().is_some();
+            let has_touch = seat.get_touch().is_some();
+            if !has_keyboard && !has_pointer && !has_touch {
+                println!("Removing empty seat: {seat_name}");
+                false
+            } else {
+                true
+            }
+        });
+
         Ok(())
     }
 }

@@ -34,7 +34,12 @@ function Wm:quit() end
 --- @param callback fun(e: nil)
 function Wm:on(event, callback) end
 
+--- @param event "tick"
+--- @param callback fun(e: nil)
+function Wm:on(event, callback) end
+
 --- @class WmInput
+--- @field seats WmSeats
 local WmInput = {}
 
 --- @param event "key"
@@ -69,6 +74,9 @@ function WmOutputs:name(name) end
 
 --- @class Pointer
 local Pointer = {}
+
+--- @return Seat
+function Pointer:seat() end
 
 --- @return Point
 function Pointer:position() end
@@ -116,6 +124,9 @@ Key = Keys
 --- @class Keyboard
 local Keyboard = {}
 
+--- @return Seat
+function Keyboard:seat() end
+
 --- @return string
 function Keyboard:get_layout() end
 
@@ -124,6 +135,7 @@ function Keyboard:get_layout() end
 function Keyboard:set_layout(keymap) end
 
 --- @class KeyEvent
+--- @field keyboard Keyboard
 --- @field state string
 --- @field serial number
 --- @field time number

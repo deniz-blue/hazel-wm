@@ -9,7 +9,7 @@ use smithay::{
 
 use crate::{
     core::{GlobalHazel, Hazel},
-    lua::api::wm_input_sym::LuaKeysym,
+    lua::api::{wm_input_seats::WmSeat, wm_input_sym::LuaKeysym},
     lua_typedef,
 };
 
@@ -17,6 +17,17 @@ pub struct WmInputKeyboard(pub KeyboardHandle<Hazel>);
 
 impl UserData for WmInputKeyboard {
     fn add_methods<M: mlua::prelude::LuaUserDataMethods<Self>>(methods: &mut M) {
+        methods.add_method("seat", |_, this, _: ()| {
+            GlobalHazel::try_with(|hazel| {
+                Ok(hazel
+                    .compositor
+                    .seats
+                    .values()
+                    .find(|seat| seat.get_keyboard().map(|k| k == this.0).unwrap_or(false))
+                    .map(|s| WmSeat(s.clone())))
+            })
+        });
+
         methods.add_method("get_layout", |_, this, _: ()| {
             GlobalHazel::try_with(|hazel| {
                 Ok(this.0.with_xkb_state(hazel, |k| {
@@ -47,12 +58,14 @@ impl UserData for WmInputKeyboard {
 }
 
 lua_typedef!(Keyboard => WmInputKeyboard {
-	fn get_layout() -> string;
-	fn set_layout(keymap: string) -> boolean;
+    fn seat() -> Seat;
+    fn get_layout() -> string;
+    fn set_layout(keymap: string) -> boolean;
 });
 
 #[derive(Clone, Debug)]
 pub struct KeyEvent {
+    pub keyboard: KeyboardHandle<Hazel>,
     pub keycode: Keycode,
     pub keysym: Keysym,
     pub keysyms: Vec<Keysym>,
@@ -79,6 +92,9 @@ impl KeyEvent {
 
 impl UserData for KeyEvent {
     fn add_fields<F: mlua::prelude::LuaUserDataFields<Self>>(fields: &mut F) {
+        fields.add_field_method_get("keyboard", |_, this| {
+            Ok(WmInputKeyboard(this.keyboard.clone()))
+        });
         fields.add_field_method_get("state", |_, this| Ok(format!("{:?}", this.state)));
         fields.add_field_method_get("serial", |_, this| Ok(Into::<u32>::into(this.serial)));
         fields.add_field_method_get("time", |_, this| Ok(this.time));
@@ -105,6 +121,7 @@ impl UserData for KeyEvent {
 }
 
 lua_typedef!(KeyEvent => KeyEvent {
+    let keyboard: Keyboard;
     let state: string;
     let serial: number;
     let time: number;

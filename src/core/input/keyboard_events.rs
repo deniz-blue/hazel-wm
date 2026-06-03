@@ -1,14 +1,17 @@
-use std::error::Error as StdError;
 use smithay::{
     backend::input::{Device, Event, InputBackend, KeyboardKeyEvent},
     input::keyboard::FilterResult,
     utils::SERIAL_COUNTER,
 };
+use std::error::Error as StdError;
 
 use crate::{core::Hazel, lua::api::wm_input_keyboard::KeyEvent};
 
 impl Hazel {
-    pub fn on_keyboard_key<B: InputBackend>(&mut self, event: B::KeyboardKeyEvent) -> std::result::Result<(), Box<dyn StdError>> {
+    pub fn on_keyboard_key<B: InputBackend>(
+        &mut self,
+        event: B::KeyboardKeyEvent,
+    ) -> std::result::Result<(), Box<dyn StdError>> {
         let device_id = event.device().id();
         let keycode = event.key_code();
         let state = event.state();
@@ -17,7 +20,7 @@ impl Hazel {
 
         let (_, keyboard) = self.compositor.get_keyboard_handle(&device_id).unwrap();
 
-        keyboard.input::<(), _>(
+        keyboard.clone().input::<(), _>(
             self,
             keycode,
             state,
@@ -25,6 +28,7 @@ impl Hazel {
             time,
             move |hazel, modifiers, kh| {
                 let event = KeyEvent {
+                    keyboard,
                     keycode,
                     keysym: kh.modified_sym(),
                     keysyms: kh.modified_syms(),
@@ -50,7 +54,7 @@ impl Hazel {
                 }
             },
         );
-		
+
         Ok(())
     }
 }

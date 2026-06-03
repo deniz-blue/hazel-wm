@@ -3,6 +3,7 @@ pub mod macros;
 pub mod utils;
 pub mod wm;
 pub mod wm_input;
+pub mod wm_input_seats;
 pub mod wm_input_keyboard;
 pub mod wm_input_sym;
 pub mod wm_input_pointer;

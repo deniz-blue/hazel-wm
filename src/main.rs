@@ -18,11 +18,11 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
 
     init_logging();
 
-    let mut event_loop: HazelEventLoop = EventLoop::try_new().map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
+    let mut event_loop: HazelEventLoop =
+        EventLoop::try_new().map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
     let mut state = Hazel::new(&mut event_loop)?;
 
-    let backend = Backend::new_winit();
-    backend.initialize(&mut state, &mut event_loop)?;
+    Backend::create_winit(&mut state, &mut event_loop)?;
 
     // Safety: single threaded
     unsafe { std::env::set_var("WAYLAND_DISPLAY", &state.compositor.socket_name) };
@@ -51,11 +51,21 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
         println!("Initialized Lua");
     });
 
-    event_loop.run(None, &mut state, move |hazel| {
-        hazel.compositor.space.elements().for_each(|window| {
-            window.toplevel().unwrap().send_pending_configure();
-        });
-    }).map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
+    event_loop
+        .run(None, &mut state, move |hazel| {
+            GlobalHazel::execute(hazel, |hazel| {
+                hazel
+                    .wm()
+                    .events
+                    .emit("tick".to_owned(), ())
+                    .expect("Failed to emit tick event");
+            });
+
+            hazel.compositor.space.elements().for_each(|window| {
+                window.toplevel().unwrap().send_pending_configure();
+            });
+        })
+        .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
 
     Ok(())
 }
