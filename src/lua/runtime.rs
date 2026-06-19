@@ -7,7 +7,7 @@ use tracing::{error, info};
 use crate::{
     core::{GlobalHazel, HazelEventLoop},
     lua::api::{
-        utils::LuaPoint,
+        utils::{LuaPoint, LuaRect},
         wm::Wm,
         wm_input_sym::{LuaKeys, LuaMouseButtons},
     },
@@ -50,6 +50,7 @@ impl HazelLua {
         globals.set("Button", LuaMouseButtons)?;
 
         globals.set("Point", LuaPoint::<f64, _>::create_ctor(&self.lua)?)?;
+        globals.set("Rect", LuaRect::create_ctor(&self.lua)?)?;
 
         globals.set(
             "spawn",

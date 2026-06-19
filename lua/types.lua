@@ -23,15 +23,54 @@ local Point = {}
 --- @return nil
 function Point:add(other) end
 
+Point = Point
+
 --- @class Size
 --- @field width number
 --- @field height number
 local Size = {}
 
+--- @class Rect
+--- @field x number
+--- @field y number
+--- @field width number
+--- @field height number
+--- @overload fun(x: number, y: number, width: number, height: number): Rect
+--- @overload fun(table: table): Rect
+local Rect = {}
+
+--- @class Rect
+--- @param point Point
+--- @return boolean
+function Rect:contains(point) end
+
+--- @class Rect
+--- @param other Rect
+--- @return boolean
+function Rect:intersects(other) end
+
+--- @class Rect
+--- @param other Rect
+--- @return Rect
+function Rect:intersection(other) end
+
+--- @class Rect
+--- @param other Rect
+--- @return Rect
+function Rect:merge(other) end
+
+--- @class Rect
+--- @param amount number
+--- @return Rect
+function Rect:inset(amount) end
+
+Rect = Rect
+
 --- @class Wm
 --- @field name string
 --- @field input WmInput
 --- @field windows WmWindows
+--- @field layers WmLayers
 --- @field outputs WmOutputs
 local Wm = {}
 
@@ -140,6 +179,11 @@ function Pointer:buttons() end
 --- @class Pointer
 --- @return Option<Window>
 function Pointer:window_under() end
+
+--- @class Pointer
+--- @param point Point
+--- @return nil
+function Pointer:move(point) end
 
 --- @class MouseButton
 local MouseButton = {}
@@ -336,6 +380,69 @@ function WindowStates:list() end
 --- @param enabled boolean
 --- @return nil
 function WindowStates:set(name, enabled) end
+
+--- @class WmLayers
+local WmLayers = {}
+
+--- @class WmLayers
+--- @return number
+function WmLayers:count() end
+
+--- @class WmLayers
+--- @param index number
+--- @return Layer
+function WmLayers:get(index) end
+
+--- @class WmLayers
+--- @return Array<Layer>
+function WmLayers:all() end
+
+--- @class WmLayers
+--- @param name string
+--- @return Array<Layer>
+function WmLayers:namespace(name) end
+
+--- @class WmLayers
+--- @param depth string
+--- @return Array<Layer>
+function WmLayers:depth(depth) end
+
+--- @class WmLayers
+--- @param name string
+--- @return Array<Layer>
+function WmLayers:on_output(name) end
+
+--- @class WmLayers
+--- @param point Point
+--- @return Layer
+function WmLayers:under(point) end
+
+--- @class Layer
+local Layer = {}
+
+--- @class Layer
+--- @return string
+function Layer:namespace() end
+
+--- @class Layer
+--- @return string
+function Layer:layer() end
+
+--- @class Layer
+--- @return Point
+function Layer:position() end
+
+--- @class Layer
+--- @return Size
+function Layer:size() end
+
+--- @class Layer
+--- @return WmOutput
+function Layer:output() end
+
+--- @class Layer
+--- @return nil
+function Layer:close() end
 
 ---@param command string
 function spawn(command) end

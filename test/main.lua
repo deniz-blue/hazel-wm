@@ -80,12 +80,27 @@ wm.input:on("pointer_move", function(e)
 			end
 		end
 	end
+
+	-- constrain pointer to the total bounding box of all outputs
+	local bounds
+	for _, out in ipairs(wm.outputs:all()) do
+		local r = Rect(out:position().x, out:position().y, out:size().width, out:size().height)
+		bounds = bounds and bounds:merge(r) or r
+	end
+
+	if bounds then
+		local pos = e.position
+		local clamped = {
+			x = math.max(bounds.x, math.min(bounds.x + bounds.width - 1, pos.x)),
+			y = math.max(bounds.y, math.min(bounds.y + bounds.height - 1, pos.y)),
+		}
+		if clamped.x ~= pos.x or clamped.y ~= pos.y then
+			e:prevent_default()
+			e.pointer:move(clamped)
+		end
+	end
 end)
 
 wm.windows:on("new_window", function(window)
 	print("New window added!")
-
-	-- window:set_position({ x = 100, y = 100 })
 end)
-
--- wm.outputs.winit:move({ x = -200, y = -200 })

@@ -2,7 +2,7 @@ use smithay::utils::Logical;
 
 use crate::lua::{
     api::{
-        utils::{LuaPoint, LuaSize},
+        utils::{LuaPoint, LuaRect, LuaSize},
         wm::Wm,
         wm_input::WmInput,
         wm_input_keyboard::{KeyEvent, ModifiersStateUserData, WmInputKeyboard},
@@ -32,7 +32,10 @@ pub fn dump_typedefs() {
     println!();
 
     LuaPoint::<f64, Logical>::dump();
+    println!("Point = Point\n");
     LuaSize::<f64, Logical>::dump();
+    LuaRect::dump();
+    println!("Rect = Rect\n");
 
     Wm::dump();
 
@@ -42,6 +45,11 @@ pub fn dump_typedefs() {
 
     WmSeat::dump();
     WmInputPointer::dump();
+    // Manual: "move" is a Rust keyword, can't use in macro
+    println!("--- @class Pointer");
+    println!("--- @param point Point");
+    println!("--- @return nil");
+    println!("function Pointer:move(point) end\n");
     LuaMouseButton::dump();
     LuaMouseButtons::dump();
     PointerButtonEvent::dump();

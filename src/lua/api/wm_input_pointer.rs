@@ -4,11 +4,11 @@ use mlua::UserData;
 use smithay::{
     backend::input::ButtonState,
     input::pointer::{ButtonEvent, MotionEvent, PointerHandle, RelativeMotionEvent},
-    utils::{Logical, Point, Serial},
+    utils::{Logical, Point, Serial, SERIAL_COUNTER},
 };
 
 use crate::{
-    core::{GlobalHazel, Hazel},
+    core::{input::pointer::PointerState, GlobalHazel, Hazel},
     lua::api::{
         utils::LuaPoint, wm_input_seats::WmSeat, wm_input_sym::LuaMouseButton, wm_windows::WmWindow,
     },
@@ -46,6 +46,33 @@ impl UserData for WmInputPointer {
                     .map(|(window, _)| WmWindow(window.clone())))
             })
         });
+        methods.add_method("move", |_, this, position: LuaPoint<f64, _>| {
+            GlobalHazel::with(|hazel| {
+                let under = hazel.compositor.surface_under(position.0);
+                let serial = SERIAL_COUNTER.next_serial();
+                let event = MotionEvent {
+                    location: position.0,
+                    serial,
+                    time: 0,
+                };
+
+                hazel
+                    .compositor
+                    .pointers
+                    .entry(this.0.clone())
+                    .or_insert_with(PointerState::new)
+                    .absolute_previous = position.0;
+
+                this.0.motion(
+                    hazel,
+                    under.map(|(_, surface, point)| (surface, point)),
+                    &event,
+                );
+                this.0.frame(hazel);
+                Ok(())
+            })
+        });
+
         methods.add_method("seat", |_, this, _: ()| {
             GlobalHazel::try_with(|hazel| {
                 Ok(hazel

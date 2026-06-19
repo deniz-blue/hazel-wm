@@ -4,7 +4,7 @@ use std::{
 };
 
 use mlua::{FromLua, IntoLua, MetaMethod, UserData};
-use smithay::utils::{Coordinate, Logical, Point, Size};
+use smithay::utils::{Coordinate, Logical, Point, Rectangle, Size};
 
 use crate::lua_typedef;
 
@@ -127,6 +127,141 @@ impl<N, Kind> From<Point<N, Kind>> for LuaPoint<N, Kind> {
         LuaPoint(point)
     }
 }
+
+pub struct LuaRect(pub Rectangle<i32, Logical>);
+
+impl LuaRect {
+    pub fn contains(&self, point: LuaPoint<i32, Logical>) -> bool {
+        self.0.contains(point.0)
+    }
+
+    pub fn intersects(&self, other: &LuaRect) -> bool {
+        self.0.overlaps(other.0)
+    }
+
+    pub fn intersection(&self, other: &LuaRect) -> Option<LuaRect> {
+        self.0.intersection(other.0).map(LuaRect)
+    }
+
+    /// Returns the smallest rect that contains both.
+    pub fn merge(&self, other: &LuaRect) -> LuaRect {
+        use smithay::utils::Coordinate;
+        let min_x = Coordinate::min(self.0.loc.x, other.0.loc.x);
+        let min_y = Coordinate::min(self.0.loc.y, other.0.loc.y);
+        let max_x = Coordinate::max(self.0.loc.x + self.0.size.w, other.0.loc.x + other.0.size.w);
+        let max_y = Coordinate::max(self.0.loc.y + self.0.size.h, other.0.loc.y + other.0.size.h);
+        LuaRect(Rectangle::from_extremities(
+            (min_x, min_y),
+            (max_x, max_y),
+        ))
+    }
+
+    pub fn inset(&self, amount: i32) -> LuaRect {
+        LuaRect(Rectangle::from_extremities(
+            (self.0.loc.x + amount, self.0.loc.y + amount),
+            (self.0.loc.x + self.0.size.w - amount, self.0.loc.y + self.0.size.h - amount),
+        ))
+    }
+}
+
+impl LuaRect {
+    pub fn create_ctor(lua: &mlua::Lua) -> mlua::Result<mlua::Function> {
+        lua.create_function(move |lua, args: mlua::MultiValue| {
+            let table: mlua::Table = match args.len() {
+                4 => lua.create_sequence_from(args.into_iter())?,
+                1 => args.into_iter().next().and_then(|v| {
+                    if let mlua::Value::Table(t) = v { Some(t) } else { None }
+                }).ok_or_else(|| mlua::Error::FromLuaConversionError {
+                    from: "value",
+                    to: "Rect".to_owned(),
+                    message: Some("expected a table or 4 numbers".to_string()),
+                })?,
+                _ => return Err(mlua::Error::FromLuaConversionError {
+                    from: "arguments",
+                    to: "Rect".to_owned(),
+                    message: Some("expected 1 table or 4 numbers".to_string()),
+                }),
+            };
+            let x: i32 = table.get("x").or(table.get(1))?;
+            let y: i32 = table.get("y").or(table.get(2))?;
+            let w: i32 = table.get("width").or(table.get(3))?;
+            let h: i32 = table.get("height").or(table.get(4))?;
+            Ok(LuaRect(Rectangle::new((x, y).into(), (w, h).into())))
+        })
+    }
+}
+
+impl FromLua for LuaRect {
+    fn from_lua(value: mlua::Value, _: &mlua::Lua) -> mlua::Result<Self> {
+        let mlua::Value::Table(table) = value else {
+            return Err(mlua::Error::FromLuaConversionError {
+                from: value.type_name(),
+                to: "Rect".to_owned(),
+                message: Some("expected a table for Rect".to_string()),
+            });
+        };
+
+        let x: i32 = table.get("x").or(table.get(1))?;
+        let y: i32 = table.get("y").or(table.get(2))?;
+        let w: i32 = table.get("width").or(table.get(3))?;
+        let h: i32 = table.get("height").or(table.get(4))?;
+
+        Ok(LuaRect(Rectangle::new((x, y).into(), (w, h).into())))
+    }
+}
+
+impl Display for LuaRect {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Rect {{ x: {}, y: {}, width: {}, height: {} }}",
+            self.0.loc.x, self.0.loc.y, self.0.size.w, self.0.size.h
+        )
+    }
+}
+
+impl UserData for LuaRect {
+    fn add_fields<F: mlua::prelude::LuaUserDataFields<Self>>(fields: &mut F) {
+        fields.add_field_method_get("x", |_, this| Ok(this.0.loc.x));
+        fields.add_field_method_get("y", |_, this| Ok(this.0.loc.y));
+        fields.add_field_method_get("width", |_, this| Ok(this.0.size.w));
+        fields.add_field_method_get("height", |_, this| Ok(this.0.size.h));
+    }
+
+    fn add_methods<M: mlua::prelude::LuaUserDataMethods<Self>>(methods: &mut M) {
+        crate::lua_display_metamethods!(methods);
+
+        methods.add_method("contains", |_, this, point: LuaPoint<i32, _>| {
+            Ok(this.contains(point))
+        });
+        methods.add_method("intersects", |_, this, other: LuaRect| {
+            Ok(this.intersects(&other))
+        });
+        methods.add_method("intersection", |_, this, other: LuaRect| {
+            Ok(this.intersection(&other))
+        });
+        methods.add_method("merge", |_, this, other: LuaRect| {
+            Ok(this.merge(&other))
+        });
+        methods.add_method("inset", |_, this, amount: i32| {
+            Ok(this.inset(amount))
+        });
+    }
+}
+
+lua_typedef!(Rect => LuaRect {
+    fn(x: number, y: number, width: number, height: number) -> Rect;
+    fn(table: table) -> Rect;
+    let x: number;
+    let y: number;
+    let width: number;
+    let height: number;
+    fn contains(point: Point) -> boolean;
+    fn intersects(other: Rect) -> boolean;
+    fn intersection(other: Rect) -> Rect;
+    fn merge(other: Rect) -> Rect;
+    fn inset(amount: number) -> Rect;
+});
 
 lua_typedef!(Size => LuaSize<f64, Logical> {
     let width: number;
