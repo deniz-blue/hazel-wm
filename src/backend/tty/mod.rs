@@ -270,24 +270,18 @@ impl HazelTtyBackend {
             match event {
                 DrmEvent::VBlank(crtc) => {
                     let meta = meta.expect("VBlank events must have metadata");
-                    let space = &mut state.compositor.space;
                     let tty = match &mut state.backend {
                         Backend::Udev(tty) => tty,
                         _ => unreachable!(),
                     };
-                    tty.on_vblank(space, node, crtc, meta);
+                    tty.on_vblank(node, crtc, meta);
 
                     // Schedule the next render after this VBlank.
                     let h = handle.clone();
                     let h_clone = h.clone();
                     let timer = Timer::immediate();
                     let _ = h.insert_source(timer, move |_, _, state: &mut Hazel| {
-                        let space = &mut state.compositor.space;
-                        let tty = match &mut state.backend {
-                            Backend::Udev(tty) => tty,
-                            _ => return TimeoutAction::Drop,
-                        };
-                        tty.render_and_queue(space, node, crtc, h_clone.clone());
+                        state.render_tty_output(node, crtc, h_clone.clone());
                         TimeoutAction::Drop
                     });
                 }
@@ -316,15 +310,10 @@ impl HazelTtyBackend {
             .map(|d| d.surfaces.keys().copied().collect())
             .unwrap_or_default();
         for &crtc in &crtcs {
-            let handle = loop_handle.clone();
+            let h = loop_handle.clone();
             let timer = Timer::immediate();
             let _ = loop_handle.insert_source(timer, move |_, _, state: &mut Hazel| {
-                let space = &mut state.compositor.space;
-                let tty = match &mut state.backend {
-                    Backend::Udev(tty) => tty,
-                    _ => return TimeoutAction::Drop,
-                };
-                tty.render_and_queue(space, node, crtc, handle.clone());
+                state.render_tty_output(node, crtc, h.clone());
                 TimeoutAction::Drop
             });
         }

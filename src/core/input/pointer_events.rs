@@ -10,7 +10,7 @@ use smithay::{
 use std::error::Error as StdError;
 
 use crate::{
-    core::{Hazel, input::pointer::PointerAbsoluteMapping},
+    core::{Hazel, input::pointer::{PointerAbsoluteMapping, PointerState}},
     lua::{
         api::wm_input_pointer::{PointerButtonEvent, PointerMoveEvent},
         ext::LuaErrorExt,
@@ -41,11 +41,12 @@ impl Hazel {
             keyboard.set_focus(self, None, serial);
         }
 
-        let pressed = self
+        let pressed = &mut self
             .compositor
-            .pointer_pressed
+            .pointers
             .entry(pointer.clone())
-            .or_default();
+            .or_insert_with(PointerState::new)
+            .pressed;
 
         if state == ButtonState::Pressed {
             pressed.push(button);
@@ -86,6 +87,9 @@ impl Hazel {
 
         let (_, pointer) = self.compositor.get_pointer_handle(&device_id).unwrap();
 
+        let new_position = pointer.current_location() + delta;
+        let under = self.compositor.surface_under(new_position);
+
         let event = PointerMoveEvent {
             default_prevented: Default::default(),
             pointer: pointer.clone(),
@@ -94,10 +98,14 @@ impl Hazel {
             delta,
             delta_unaccel,
             output_position: None,
-            position: pointer.current_location() + delta,
+            position: new_position,
         };
 
-        pointer.relative_motion(self, None, &event.relative_motion());
+        pointer.motion(
+            self,
+            under.map(|(_, surface, point)| (surface, point)),
+            &event.motion(),
+        );
 
         pointer.frame(self);
 
@@ -119,15 +127,16 @@ impl Hazel {
 
         let previous_output_position = self
             .compositor
-            .pointer_absolute_previous
+            .pointers
             .get(&pointer_handle)
-            .cloned()
+            .map(|s| s.absolute_previous)
             .unwrap_or_else(|| pointer_handle.current_location());
 
         let mapping = self
             .compositor
-            .pointer_mapping
+            .pointers
             .get(&pointer_handle)
+            .map(|s| &s.mapping)
             .unwrap_or(&PointerAbsoluteMapping::FirstContainingOutput);
 
         let coordinate_space = match mapping {
@@ -159,8 +168,10 @@ impl Hazel {
         let delta = location_output - previous_output_position;
 
         self.compositor
-            .pointer_absolute_previous
-            .insert(pointer_handle.clone(), location_output);
+            .pointers
+            .entry(pointer_handle.clone())
+            .or_insert_with(PointerState::new)
+            .absolute_previous = location_output;
 
         let event = PointerMoveEvent {
             default_prevented: Default::default(),

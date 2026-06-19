@@ -20,7 +20,7 @@ use smithay::reexports::wayland_protocols_misc::server_decoration::server::org_k
 use tracing::info;
 
 use crate::core::{
-    Hazel, HazelEventLoop, client_state::ClientState, input::pointer::PointerAbsoluteMapping,
+    Hazel, HazelEventLoop, client_state::ClientState, input::pointer::PointerState,
 };
 
 pub struct HazelCompositor {
@@ -29,9 +29,7 @@ pub struct HazelCompositor {
     pub smithay: HazelSmithay,
     pub seats: HashMap<String, Seat<Hazel>>,
     pub device_to_seat: HashMap<String, String>,
-    pub pointer_pressed: HashMap<PointerHandle<Hazel>, Vec<u32>>,
-    pub pointer_mapping: HashMap<PointerHandle<Hazel>, PointerAbsoluteMapping>,
-    pub pointer_absolute_previous: HashMap<PointerHandle<Hazel>, Point<f64, Logical>>,
+    pub pointers: HashMap<PointerHandle<Hazel>, PointerState>,
 }
 
 pub struct HazelSmithay {
@@ -77,9 +75,7 @@ impl HazelCompositor {
 
             seats: HashMap::new(),
             device_to_seat: HashMap::new(),
-            pointer_mapping: HashMap::new(),
-            pointer_pressed: HashMap::new(),
-            pointer_absolute_previous: HashMap::new(),
+            pointers: HashMap::new(),
         }
     }
 

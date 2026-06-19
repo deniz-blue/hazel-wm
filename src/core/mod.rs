@@ -19,6 +19,7 @@ pub mod compositor;
 pub mod handlers;
 pub mod input;
 pub mod outputs;
+pub mod render;
 
 pub struct Hazel {
     pub start_time: Instant,

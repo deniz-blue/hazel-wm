@@ -6,7 +6,7 @@ use std::error::Error as StdError;
 use tracing::info;
 
 use crate::{
-    core::Hazel,
+    core::{Hazel, input::pointer::PointerState},
     lua::api::{wm_input_keyboard::WmInputKeyboard, wm_input_pointer::WmInputPointer},
 };
 
@@ -47,6 +47,7 @@ impl Hazel {
         if device.has_capability(DeviceCapability::Pointer) {
             info!("Adding pointer capability to seat {seat_to_assign}");
             let pointer = seat.add_pointer();
+            self.compositor.pointers.insert(pointer.clone(), PointerState::new());
             self.wm()
                 .input
                 .events
@@ -81,6 +82,9 @@ impl Hazel {
                 seat.remove_keyboard();
             }
             if device.has_capability(DeviceCapability::Pointer) {
+                if let Some(pointer) = seat.get_pointer() {
+                    self.compositor.pointers.remove(&pointer);
+                }
                 seat.remove_pointer();
             }
         } else {

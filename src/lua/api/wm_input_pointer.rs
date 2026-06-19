@@ -26,9 +26,9 @@ impl WmInputPointer {
         GlobalHazel::try_with(|hazel| {
             Ok(hazel
                 .compositor
-                .pointer_pressed
+                .pointers
                 .get(&self.0)
-                .cloned()
+                .map(|s| s.pressed.clone())
                 .unwrap_or_default())
         })
     }
