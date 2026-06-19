@@ -5,24 +5,30 @@ pub mod core;
 pub mod lua;
 
 use smithay::reexports::calloop::EventLoop;
+use tracing::{error, info};
 
-use crate::backend::Backend;
 use crate::core::{GlobalHazel, Hazel, HazelEventLoop};
 use crate::lua::export_typedefs::dump_typedefs;
 
-fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
+fn main() {
     if std::env::args().any(|arg| arg == "--dump-typedefs") {
         dump_typedefs();
-        return Ok(());
+        return;
     }
 
     init_logging();
 
+    info!("Starting Hazel...");
+    if let Err(e) = run() {
+        error!("{e}");
+        std::process::exit(1);
+    }
+}
+
+fn run() -> Result<(), Box<dyn std::error::Error>> {
     let mut event_loop: HazelEventLoop =
         EventLoop::try_new().map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
     let mut state = Hazel::new(&mut event_loop)?;
-
-    Backend::create_winit(&mut state, &mut event_loop)?;
 
     // Safety: single threaded
     unsafe { std::env::set_var("WAYLAND_DISPLAY", &state.compositor.socket_name) };
@@ -60,6 +66,10 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
                     .emit("tick".to_owned(), ())
                     .expect("Failed to emit tick event");
             });
+
+            hazel.compositor.space.refresh();
+            hazel.compositor.smithay.popups.cleanup();
+            let _ = hazel.display_handle.flush_clients();
 
             hazel.compositor.space.elements().for_each(|window| {
                 window.toplevel().unwrap().send_pending_configure();

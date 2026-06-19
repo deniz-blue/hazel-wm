@@ -1,8 +1,9 @@
 use smithay::{
     backend::input::{Device, Event, InputBackend, KeyboardKeyEvent},
-    input::keyboard::FilterResult,
+    input::keyboard::{FilterResult, keysyms},
     utils::SERIAL_COUNTER,
 };
+use tracing::{error, info};
 use std::error::Error as StdError;
 
 use crate::{core::Hazel, lua::api::wm_input_keyboard::KeyEvent};
@@ -39,6 +40,16 @@ impl Hazel {
                     default_prevented: Default::default(),
                 };
 
+                if (keysyms::KEY_XF86Switch_VT_1..=keysyms::KEY_XF86Switch_VT_12)
+                    .contains(&event.keysym.raw())
+                {
+                    let vt = event.keysym.raw() - keysyms::KEY_XF86Switch_VT_1 + 1;
+                    info!("Switching to VT {}", vt);
+                    if let Err(e) = hazel.backend.switch_vt(vt) {
+                        error!("Failed to switch VT: {e}");
+                    }
+                }
+
                 hazel
                     .wm()
                     .input
@@ -47,7 +58,7 @@ impl Hazel {
                     .expect("Oops");
 
                 if event.default_prevented.take() {
-                    println!("Default prevented for key event: {:?}", event.keycode);
+                    info!("Default prevented for key event: {:?}", event.keycode);
                     FilterResult::Intercept(())
                 } else {
                     FilterResult::Forward

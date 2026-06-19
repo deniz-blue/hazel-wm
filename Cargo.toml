@@ -14,14 +14,22 @@ mlua = { version = "0.11.6", features = [
 ] }
 mlua-pkg = "0.3.0"
 calloop-notify = "0.2.0"
+tracing = "0.1.44"
 
 [dependencies.smithay]
 version = "0.7.0"
-default-features = false
 features = [
 	"backend_winit",
 	"wayland_frontend",
 	"desktop",
 	"backend_udev",
 	"backend_libinput",
+	"backend_session",
+	"backend_session_libseat",
+	"backend_drm",
+	"backend_gbm",
+	"backend_egl",
+	"renderer_gl",
+	"renderer_multi",
+	"use_system_lib",
 ]

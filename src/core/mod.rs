@@ -7,10 +7,12 @@ use smithay::reexports::{
 use std::error::Error as StdError;
 
 use crate::{
+    backend::Backend,
     core::compositor::HazelCompositor,
     lua::{api::wm::Wm, runtime::HazelLua},
 };
 
+pub mod backend_post_init;
 pub mod client_state;
 pub mod compositor;
 pub mod handlers;
@@ -22,6 +24,7 @@ pub struct Hazel {
     pub display_handle: DisplayHandle,
     pub loop_signal: LoopSignal,
     pub compositor: HazelCompositor,
+    pub backend: Backend,
     pub lua: HazelLua,
 }
 
@@ -35,6 +38,12 @@ impl Hazel {
         let compositor = HazelCompositor::new(event_loop, &display_handle);
         let lua = HazelLua::new_uninit();
         let loop_signal = event_loop.get_signal();
+
+        let backend = if std::env::var("WAYLAND_DISPLAY").is_err() {
+            Backend::create_tty(&display_handle, event_loop)
+        } else {
+            Backend::create_winit(event_loop)
+        }?;
 
         event_loop
             .handle()
@@ -53,13 +62,18 @@ impl Hazel {
 
         lua.listen(event_loop)?;
 
-        Ok(Self {
+        let mut this = Self {
             start_time,
             display_handle,
             loop_signal,
             compositor,
             lua,
-        })
+            backend,
+        };
+
+        this.backend_post_init()?;
+
+        Ok(this)
     }
 
     pub fn wm(&self) -> Rc<Wm> {
