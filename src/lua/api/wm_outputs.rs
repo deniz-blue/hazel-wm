@@ -120,6 +120,9 @@ lua_typedef!(WmOutputs => WmOutputs {
 pub struct WmOutputHandle(WeakOutput);
 
 impl WmOutputHandle {
+    pub fn new(output: &smithay::output::Output) -> Self {
+        Self(output.downgrade())
+    }
     pub fn name(&self) -> Option<String> {
         self.0.upgrade().map(|o| o.name())
     }

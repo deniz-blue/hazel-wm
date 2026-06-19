@@ -2,7 +2,7 @@ use smithay::utils::Logical;
 
 use crate::lua::{
     api::{
-        utils::{LuaPoint, LuaSize}, wm::Wm, wm_input::WmInput, wm_input_keyboard::{KeyEvent, ModifiersStateUserData, WmInputKeyboard}, wm_input_pointer::{PointerButtonEvent, PointerMoveEvent, WmInputPointer}, wm_input_seats::{WmInputSeats, WmSeat}, wm_input_sym::{LuaKeys, LuaKeysym, LuaMouseButton, LuaMouseButtons}, wm_outputs::{LuaOutputMode, WmOutputHandle, WmOutputs}, wm_windows::{WmWindow, WmWindows, WindowStates}
+        utils::{LuaPoint, LuaSize}, wm::Wm, wm_input::WmInput, wm_input_keyboard::{KeyEvent, ModifiersStateUserData, WmInputKeyboard}, wm_input_pointer::{PointerButtonEvent, PointerMoveEvent, WmInputPointer}, wm_input_seats::{WmInputSeats, WmSeat}, wm_input_sym::{LuaKeys, LuaKeysym, LuaMouseButton, LuaMouseButtons}, wm_layers::{LayerHandle, WmLayers}, wm_outputs::{LuaOutputMode, WmOutputHandle, WmOutputs}, wm_windows::{WmWindow, WmWindows, WindowStates}
     },
     typedefs::LuaTypeDef,
 };
@@ -50,6 +50,9 @@ pub fn dump_typedefs() {
     WmWindows::dump();
     WmWindow::dump();
     WindowStates::dump();
+
+    WmLayers::dump();
+    LayerHandle::dump();
 
     println!("---@param command string");
     println!("function spawn(command) end");

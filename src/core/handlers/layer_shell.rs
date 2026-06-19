@@ -14,7 +14,10 @@ use tracing::info;
 
 use smithay::reexports::wayland_server::Resource;
 
-use crate::core::Hazel;
+use crate::{
+    core::Hazel,
+    lua::api::wm_layers::LayerHandle,
+};
 
 impl WlrLayerShellHandler for Hazel {
     fn shell_state(&mut self) -> &mut WlrLayerShellState {
@@ -48,6 +51,12 @@ impl WlrLayerShellHandler for Hazel {
 
         let layer = LayerSurface::new(surface, namespace);
         let _ = layer_map_for_output(&output).map_layer(&layer);
+
+        let _ = self
+            .wm()
+            .layers
+            .events
+            .emit("new_surface".to_owned(), LayerHandle(layer));
     }
 
     fn layer_destroyed(&mut self, surface: smithay::wayland::shell::wlr_layer::LayerSurface) {
@@ -55,8 +64,7 @@ impl WlrLayerShellHandler for Hazel {
 
         let wl_surface = surface.wl_surface().clone();
 
-        // Find and unmap from the output's LayerMap.
-        // Collect outputs first to avoid borrowing issues with layer_map_for_output.
+        // Find the DesktopLayerSurface before unmapping, so we can emit the event.
         let outputs: Vec<_> = self.compositor.space.outputs().cloned().collect();
         for output in &outputs {
             let layer = {
@@ -67,6 +75,12 @@ impl WlrLayerShellHandler for Hazel {
                     .cloned()
             };
             if let Some(layer) = layer {
+                let _ = self
+                    .wm()
+                    .layers
+                    .events
+                    .emit("remove_surface".to_owned(), LayerHandle(layer.clone()));
+
                 let mut map = layer_map_for_output(output);
                 map.unmap_layer(&layer);
                 break;

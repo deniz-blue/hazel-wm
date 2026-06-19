@@ -6,7 +6,7 @@ use crate::{
     core::GlobalHazel,
     impl_lua_event_handler, impl_lua_event_source,
     lua::{
-        api::{wm_input::WmInput, wm_outputs::WmOutputs, wm_windows::WmWindows},
+        api::{wm_input::WmInput, wm_layers::WmLayers, wm_outputs::WmOutputs, wm_windows::WmWindows},
         event_handler::LuaEventHandler,
     },
     lua_typedef,
@@ -17,6 +17,7 @@ pub struct Wm {
     pub events: LuaEventHandler,
     pub input: Rc<WmInput>,
     pub windows: Rc<WmWindows>,
+    pub layers: Rc<WmLayers>,
     pub outputs: Rc<WmOutputs>,
 }
 
@@ -27,6 +28,7 @@ impl UserData for Wm {
         fields.add_field_method_get("name", |_, _| Ok("Hazel"));
         fields.add_field_method_get("input", |_, this| Ok(this.input.clone()));
         fields.add_field_method_get("windows", |_, this| Ok(this.windows.clone()));
+        fields.add_field_method_get("layers", |_, this| Ok(this.layers.clone()));
         fields.add_field_method_get("outputs", |_, this| Ok(this.outputs.clone()));
     }
 
@@ -44,6 +46,7 @@ lua_typedef!(Wm => Wm {
     let name: string;
     let input: WmInput;
     let windows: WmWindows;
+    let layers: WmLayers;
     let outputs: WmOutputs;
 	use ready => nil;
 	use tick => nil;

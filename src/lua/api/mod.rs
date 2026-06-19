@@ -7,5 +7,6 @@ pub mod wm_input_seats;
 pub mod wm_input_keyboard;
 pub mod wm_input_sym;
 pub mod wm_input_pointer;
+pub mod wm_layers;
 pub mod wm_outputs;
 pub mod wm_windows;
