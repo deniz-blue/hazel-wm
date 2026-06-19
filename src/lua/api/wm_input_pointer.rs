@@ -48,7 +48,7 @@ impl UserData for WmInputPointer {
         });
         methods.add_method("move", |_, this, position: LuaPoint<f64, _>| {
             GlobalHazel::with(|hazel| {
-                let under = hazel.compositor.surface_under(position.0);
+                let under = hazel.compositor.input_under(position.0);
                 let serial = SERIAL_COUNTER.next_serial();
                 let event = MotionEvent {
                     location: position.0,
@@ -63,11 +63,7 @@ impl UserData for WmInputPointer {
                     .or_insert_with(PointerState::new)
                     .absolute_previous = position.0;
 
-                this.0.motion(
-                    hazel,
-                    under.map(|(_, surface, point)| (surface, point)),
-                    &event,
-                );
+                this.0.motion(hazel, under, &event);
                 this.0.frame(hazel);
                 Ok(())
             })

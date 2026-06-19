@@ -8,6 +8,7 @@ use smithay::{
     },
     input::pointer::AxisFrame,
     utils::SERIAL_COUNTER,
+    wayland::shell::wlr_layer::Layer,
 };
 
 use crate::{
@@ -35,12 +36,18 @@ impl Hazel {
         let (seat, pointer) = self.compositor.get_pointer_handle(&device_id).unwrap();
         let pointer_pos = pointer.current_location();
 
-        if let Some((surface, _)) = self.compositor.layer_surface_under(pointer_pos) {
-            if let Some(keyboard) = seat.get_keyboard() {
-                keyboard.set_focus(self, Some(surface), serial);
+        // Raise for windows (only if no top layer consumed the position)
+        if self
+            .compositor
+            .layer_under(pointer_pos, &[Layer::Overlay, Layer::Top])
+            .is_none()
+        {
+            if let Some((window, _, _)) = self.compositor.surface_under(pointer_pos) {
+                self.compositor.space.raise_element(&window, true);
             }
-        } else if let Some((window, surface, _)) = self.compositor.surface_under(pointer_pos) {
-            self.compositor.space.raise_element(&window, true);
+        }
+
+        if let Some((surface, _)) = self.compositor.input_under(pointer_pos) {
             if let Some(keyboard) = seat.get_keyboard() {
                 keyboard.set_focus(self, Some(surface), serial);
             }
@@ -97,14 +104,7 @@ impl Hazel {
         let (_, pointer) = self.compositor.get_pointer_handle(&device_id).unwrap();
 
         let new_position = pointer.current_location() + delta;
-        let under = self
-            .compositor
-            .layer_surface_under(new_position)
-            .or_else(|| {
-                self.compositor
-                    .surface_under(new_position)
-                    .map(|(_, surface, point)| (surface, point))
-            });
+        let under = self.compositor.input_under(new_position);
 
         let event = PointerMoveEvent {
             default_prevented: Rc::new(Cell::new(false)),
@@ -177,11 +177,7 @@ impl Hazel {
         let location = location_output + coordinate_space.loc.to_f64();
         let utime = event.time();
 
-        let under = self.compositor.layer_surface_under(location).or_else(|| {
-            self.compositor
-                .surface_under(location)
-                .map(|(_, surface, point)| (surface, point))
-        });
+        let under = self.compositor.input_under(location);
 
         let delta = location_output - previous_output_position;
 

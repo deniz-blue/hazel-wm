@@ -23,7 +23,9 @@ use smithay::reexports::wayland_protocols_misc::server_decoration::server::org_k
 
 use tracing::info;
 
-use crate::core::{Hazel, HazelEventLoop, client_state::ClientState, input::pointer::PointerState};
+use crate::core::{
+    Hazel, HazelEventLoop, client_state::ClientState, input::pointer::PointerState,
+};
 
 pub struct HazelCompositor {
     pub socket_name: OsString,
@@ -129,11 +131,14 @@ impl HazelCompositor {
     }
 
     /// Returns the topmost layer surface and its position under the given point.
-    /// Checks layers in reverse z-order: Overlay → Top → Bottom → Background.
-    /// Translates global coords to each output's local space before checking.
-    pub fn layer_surface_under(
+    /// Returns the topmost layer surface in the given layers under `pos`.
+    /// Checks layers in the order provided (first = front-most).
+    /// Translates global coords to each output's local space.
+    /// Respects input region — returns None if the point is outside it.
+    pub fn layer_under(
         &self,
         pos: Point<f64, Logical>,
+        layers: &[Layer],
     ) -> Option<(WlSurface, Point<f64, Logical>)> {
         for output in self.space.outputs() {
             let geo = self.space.output_geometry(output)?;
@@ -146,21 +151,31 @@ impl HazelCompositor {
                 continue;
             }
             let map = layer_map_for_output(output);
-            for layer in &[Layer::Overlay, Layer::Top, Layer::Bottom, Layer::Background] {
+            for layer in layers {
                 if let Some(layer_surface) = map.layer_under(*layer, local) {
                     let layer_geo = map.layer_geometry(layer_surface).unwrap_or_default();
-                    let surface = layer_surface.wl_surface().clone();
                     if let Some((s, p)) = layer_surface
                         .surface_under(local - layer_geo.loc.to_f64(), WindowSurfaceType::ALL)
                     {
                         return Some((s, (p + layer_geo.loc + geo.loc).to_f64()));
                     }
-                    // Return the layer surface's own WlSurface in global coords.
-                    return Some((surface, pos));
                 }
             }
         }
         None
+    }
+
+    /// Full z-order input query: top layers → windows → bottom layers.
+    pub fn input_under(
+        &self,
+        pos: Point<f64, Logical>,
+    ) -> Option<(WlSurface, Point<f64, Logical>)> {
+        self.layer_under(pos, &[Layer::Overlay, Layer::Top])
+            .or_else(|| {
+                self.surface_under(pos)
+                    .map(|(_, surface, pt)| (surface, pt))
+            })
+            .or_else(|| self.layer_under(pos, &[Layer::Bottom, Layer::Background]))
     }
 
     pub fn surface_under(
