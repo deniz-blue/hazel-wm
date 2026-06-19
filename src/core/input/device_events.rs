@@ -3,6 +3,7 @@ use smithay::{
     input::keyboard::XkbConfig,
 };
 use std::error::Error as StdError;
+use tracing::info;
 
 use crate::{
     core::Hazel,
@@ -15,14 +16,14 @@ impl Hazel {
         device: impl Device,
     ) -> std::result::Result<(), Box<dyn StdError>> {
         let id = device.id();
-        println!("Device added: {id}");
+        info!("Device added: {id}");
 
         let seat_to_assign = String::from("seat0");
 
         let mut seat = if let Some(seat) = self.compositor.seats.get(&seat_to_assign) {
             seat.clone()
         } else {
-            println!("Creating new seat: {seat_to_assign}");
+            info!("Creating new seat: {seat_to_assign}");
             let seat = self
                 .compositor
                 .smithay
@@ -35,7 +36,7 @@ impl Hazel {
         };
 
         if device.has_capability(DeviceCapability::Keyboard) {
-            println!("Adding pointer capability to seat {seat_to_assign}");
+            info!("Adding keyboard capability to seat {seat_to_assign}");
             let keyboard = seat.add_keyboard(XkbConfig::default(), 200, 25).unwrap();
             self.wm()
                 .input
@@ -44,7 +45,7 @@ impl Hazel {
         }
 
         if device.has_capability(DeviceCapability::Pointer) {
-            println!("Adding pointer capability to seat {seat_to_assign}");
+            info!("Adding pointer capability to seat {seat_to_assign}");
             let pointer = seat.add_pointer();
             self.wm()
                 .input
@@ -52,7 +53,7 @@ impl Hazel {
                 .emit(String::from("new_pointer"), WmInputPointer(pointer))?;
         }
 
-        println!("Assigning device {id} to seat {seat_to_assign}");
+        info!("Assigning device {id} to seat {seat_to_assign}");
         self.compositor.device_to_seat.insert(id, seat_to_assign);
         Ok(())
     }
@@ -62,7 +63,7 @@ impl Hazel {
         device: impl Device,
     ) -> std::result::Result<(), Box<dyn StdError>> {
         let id = device.id();
-        println!("Device removed: {id}");
+        info!("Device removed: {id}");
 
         if let Some((seat_name, seat)) =
             self.compositor
@@ -75,7 +76,7 @@ impl Hazel {
                         .map(|seat| (seat_name, seat))
                 })
         {
-            println!("Removing device {id} from seat {seat_name}");
+            info!("Removing device {id} from seat {seat_name}");
             if device.has_capability(DeviceCapability::Keyboard) {
                 seat.remove_keyboard();
             }
@@ -83,7 +84,7 @@ impl Hazel {
                 seat.remove_pointer();
             }
         } else {
-            println!("Device {id} was not assigned to any seat");
+            info!("Device {id} was not assigned to any seat");
         }
 
         self.compositor.device_to_seat.remove(&id);
@@ -93,7 +94,7 @@ impl Hazel {
             let has_pointer = seat.get_pointer().is_some();
             let has_touch = seat.get_touch().is_some();
             if !has_keyboard && !has_pointer && !has_touch {
-                println!("Removing empty seat: {seat_name}");
+                info!("Removing empty seat: {seat_name}");
                 false
             } else {
                 true

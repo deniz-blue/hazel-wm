@@ -40,6 +40,8 @@ impl Hazel {
                     default_prevented: Default::default(),
                 };
 
+                // Built-in shortcuts processed before Lua gets the event.
+
                 if (keysyms::KEY_XF86Switch_VT_1..=keysyms::KEY_XF86Switch_VT_12)
                     .contains(&event.keysym.raw())
                 {
@@ -48,6 +50,17 @@ impl Hazel {
                     if let Err(e) = hazel.backend.switch_vt(vt) {
                         error!("Failed to switch VT: {e}");
                     }
+                }
+
+                if event.state == smithay::backend::input::KeyState::Pressed
+                    && event.keysym.raw() == keysyms::KEY_Q
+                    && event.modifiers.ctrl
+                    && event.modifiers.logo
+                    && event.modifiers.shift
+                    && event.modifiers.alt
+                {
+                    info!("Quitting on Ctrl+Super+Shift+Alt+Q");
+                    std::process::exit(0);
                 }
 
                 hazel

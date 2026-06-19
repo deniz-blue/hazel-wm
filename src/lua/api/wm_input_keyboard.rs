@@ -6,6 +6,7 @@ use smithay::{
     input::keyboard::{KeyboardHandle, Keysym, ModifiersState, XkbConfig},
     utils::Serial,
 };
+use tracing::warn;
 
 use crate::{
     core::{GlobalHazel, Hazel},
@@ -48,7 +49,7 @@ impl UserData for WmInputKeyboard {
                 );
 
                 if let Err(e) = &result {
-                    println!("Failed to set keyboard layout to \"{}\": {}", keymap, e);
+                    warn!("Failed to set keyboard layout to \"{}\": {}", keymap, e);
                 }
 
                 return Ok(result.is_ok());

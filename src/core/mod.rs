@@ -4,6 +4,7 @@ use smithay::reexports::{
     calloop::{EventLoop, Interest, LoopSignal, Mode, PostAction, generic::Generic},
     wayland_server::{Display, DisplayHandle},
 };
+use tracing::error;
 use std::error::Error as StdError;
 
 use crate::{
@@ -118,7 +119,7 @@ impl GlobalHazel {
                 let hazel = unsafe { &mut *ptr };
                 f(hazel)
             } else {
-                eprintln!("GlobalHazel accessed outside of execute");
+                error!("GlobalHazel accessed outside of execute");
                 Err(mlua::Error::external(
                     "GlobalHazel accessed outside of execute",
                 ))

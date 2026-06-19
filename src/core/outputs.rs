@@ -1,10 +1,11 @@
 use smithay::output::Output;
+use tracing::info;
 
 use crate::core::Hazel;
 
 impl Hazel {
     pub fn on_output_added(&mut self, output: &Output) -> Result<(), Box<dyn std::error::Error>> {
-        println!("Output added: {}", output.name());
+        info!("Output added: {}", output.name());
 
         self.wm()
             .outputs

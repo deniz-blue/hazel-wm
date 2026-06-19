@@ -35,7 +35,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
 
     GlobalHazel::execute(&mut state, |hazel| {
         if let Err(e) = hazel.lua.init() {
-            return eprintln!("Error initializing Lua: {e}");
+            return error!("Error initializing Lua: {e}");
         }
 
         hazel
@@ -54,7 +54,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                 .expect("Failed to emit output added event");
         }
 
-        println!("Initialized Lua");
+        info!("Initialized Lua");
     });
 
     event_loop

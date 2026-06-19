@@ -3,8 +3,8 @@ use std::{collections::HashMap, path::Path};
 use smithay::{
     backend::{
         allocator::gbm::{GbmAllocator, GbmBufferFlags, GbmDevice},
-        drm::{DrmDevice, DrmDeviceFd, DrmEvent, DrmNode, NodeType},
-        egl::{EGLContext, EGLDevice, EGLDisplay, context::ContextPriority},
+        drm::{DrmDevice, DrmDeviceFd, DrmNode, NodeType},
+        egl::{EGLDevice, EGLDisplay, context::ContextPriority},
         libinput::{LibinputInputBackend, LibinputSessionInterface},
         renderer::{
             ImportEgl,
@@ -15,14 +15,41 @@ use smithay::{
         udev::{UdevBackend, UdevEvent, all_gpus, primary_gpu},
     },
     reexports::{
-        calloop::LoopHandle, input::Libinput, rustix::fs::OFlags, wayland_server::DisplayHandle,
+        calloop::{
+            LoopHandle,
+            timer::{TimeoutAction, Timer},
+        },
+        drm::control::crtc,
+        input::Libinput, rustix::fs::OFlags, wayland_server::DisplayHandle,
     },
     utils::DeviceFd,
 };
+use smithay::{
+    backend::{
+        allocator::{Fourcc, Format, Modifier},
+        drm::{
+            DrmEvent,
+            compositor::DrmCompositor,
+            exporter::gbm::GbmFramebufferExporter,
+        },
+    },
+    output::{Mode as OutputMode, Output, OutputModeSource, PhysicalProperties},
+    reexports::drm::control::{Mode as DrmMode, ModeTypeFlags},
+};
+use smithay_drm_extras::drm_scanner::{DrmScanEvent, DrmScanner};
 use tracing::{debug, error, info, warn};
 
+use crate::backend::tty::output_device::Surface;
+
+const SUPPORTED_COLOR_FORMATS: [Fourcc; 4] = [
+    Fourcc::Xrgb8888,
+    Fourcc::Xbgr8888,
+    Fourcc::Argb8888,
+    Fourcc::Abgr8888,
+];
+
 use crate::{
-    backend::tty::output_device::OutputDevice,
+    backend::{tty::output_device::OutputDevice, Backend},
     core::{GlobalHazel, Hazel, HazelEventLoop},
 };
 
@@ -103,42 +130,22 @@ impl HazelTtyBackend {
             .node_with_type(NodeType::Primary)
             .and_then(|node| node.ok());
 
-        let primary_device = udev.device_list().find(|(device_id, _)| {
+        // Collect device list before udev is moved into the event source below.
+        let device_list: Vec<(u64, std::path::PathBuf)> = udev
+            .device_list()
+            .map(|(id, path)| (id, path.to_owned()))
+            .collect();
+
+        let primary_device = device_list.iter().find(|(device_id, _)| {
             primary_node
                 .map(|primary_node| *device_id == primary_node.dev_id())
                 .unwrap_or(false)
                 || *device_id == primary_gpu.dev_id()
-        });
+        }).map(|(id, path)| (*id, path.as_path()));
 
-        // if let Some((device_id, path)) = primary_device {
-        //     let node = DrmNode::from_dev_id(device_id).expect("failed to get primary node");
-        //     state
-        //         .device_added(node, path)
-        //         .expect("failed to initialize primary node");
-        // }
-
-        let primary_device_id = primary_device.map(|(device_id, _)| device_id);
-        for (device_id, _path) in udev.device_list() {
-            if Some(device_id) == primary_device_id {
-                continue;
-            }
-
-            let Ok(_node) = DrmNode::from_dev_id(device_id) else {
-                error!("Skipping device {device_id}: failed to get DRM node");
-                continue;
-            };
-
-            // TODO: device_added
-        }
 
         let api = GbmGlesBackend::with_context_priority(ContextPriority::High);
-        let mut gpu_manager = GpuManager::new(api)?;
-
-        let mut renderer = gpu_manager.single_renderer(&primary_gpu)?;
-
-        renderer.bind_wl_display(display_handle)?;
-
-        info!("Initialized renderer");
+        let gpu_manager = GpuManager::new(api)?;
 
         // Udev
 
@@ -160,12 +167,46 @@ impl HazelTtyBackend {
 
         info!("Initialized Udev backend");
 
-        Ok(Self {
+        let mut this = Self {
             session,
             gpu_manager,
             primary_gpu,
             output_devices: HashMap::new(),
-        })
+        };
+
+        let loop_handle = event_loop.handle();
+        if let Some((device_id, path)) = primary_device {
+            if let Err(e) = this.on_device_added(&loop_handle, device_id, path) {
+                error!("Failed to initialize primary DRM device: {e}");
+            }
+        }
+
+        let primary_device_id = primary_device.map(|(device_id, _)| device_id);
+        for (device_id, path) in &device_list {
+            if Some(*device_id) == primary_device_id {
+                continue;
+            }
+
+            let Ok(_node) = DrmNode::from_dev_id(*device_id) else {
+                error!("Skipping device {}: failed to get DRM node", device_id);
+                continue;
+            };
+
+            if let Err(e) = this.on_device_added(&loop_handle, *device_id, path) {
+                error!("Error adding device {}: {e}", device_id);
+            }
+        }
+
+        if let Ok(mut renderer) = this.gpu_manager.single_renderer(&this.primary_gpu) {
+            if let Err(e) = renderer.bind_wl_display(display_handle) {
+                warn!("Failed to bind renderer to display: {e}");
+            }
+            info!("Initialized renderer");
+        } else {
+            warn!("No renderer available for primary GPU after device init");
+        }
+
+        Ok(this)
     }
 
     pub fn on_device_added(
@@ -216,96 +257,43 @@ impl HazelTtyBackend {
             }
         };
 
-        // if render_node == Some(self.primary_render_node) && self.dmabuf_global.is_none() {
-        //     let render_node = self.primary_render_node;
-        //     debug!("initializing the primary renderer");
-
-        //     let mut renderer = self
-        //         .gpu_manager
-        //         .single_renderer(&render_node)
-        //         .context("error creating renderer")?;
-
-        //     if let Err(err) = renderer.bind_wl_display(&niri.display_handle) {
-        //         // wl_drm is on its way out so this is expected on most modern distros.
-        //         trace!("error binding legacy EGL to wl_display: {err}");
-        //     } else {
-        //         debug!("bound legacy EGL to wl_display");
-        //     }
-
-        //     let gles_renderer = renderer.as_gles_renderer();
-        //     resources::init(gles_renderer);
-        //     shaders::init(gles_renderer);
-
-        //     let config = self.config.borrow();
-        //     if let Some(src) = config.animations.window_resize.custom_shader.as_deref() {
-        //         shaders::set_custom_resize_program(gles_renderer, Some(src));
-        //     }
-        //     if let Some(src) = config.animations.window_close.custom_shader.as_deref() {
-        //         shaders::set_custom_close_program(gles_renderer, Some(src));
-        //     }
-        //     if let Some(src) = config.animations.window_open.custom_shader.as_deref() {
-        //         shaders::set_custom_open_program(gles_renderer, Some(src));
-        //     }
-        //     drop(config);
-
-        //     niri.update_shaders();
-
-        //     // Create the dmabuf global.
-        //     let primary_formats = renderer.dmabuf_formats();
-        //     let default_feedback =
-        //         DmabufFeedbackBuilder::new(render_node.dev_id(), primary_formats.clone())
-        //             .build()
-        //             .context("error building default dmabuf feedback")?;
-        //     let dmabuf_global = niri
-        //         .dmabuf_state
-        //         .create_global_with_default_feedback::<State>(
-        //             &niri.display_handle,
-        //             &default_feedback,
-        //         );
-        //     assert!(self.dmabuf_global.replace(dmabuf_global).is_none());
-
-        //     // Update the dmabuf feedbacks for all surfaces.
-        //     for (node, device) in self.devices.iter_mut() {
-        //         for surface in device.surfaces.values_mut() {
-        //             match surface_dmabuf_feedback(
-        //                 &surface.compositor,
-        //                 primary_formats.clone(),
-        //                 self.primary_render_node,
-        //                 device.render_node,
-        //                 *node,
-        //             ) {
-        //                 Ok(feedback) => {
-        //                     surface.dmabuf_feedback = Some(feedback);
-        //                 }
-        //                 Err(err) => {
-        //                     warn!("error building dmabuf feedback: {err:?}");
-        //                 }
-        //             }
-        //         }
-        //     }
-        // }
-
         let allocator_gbm = if render_node.is_some() {
             gbm.clone()
         } else {
             panic!("no render node available for device {node}");
         };
-
-        // } else if let Some(primary_device) = self.devices.get(&self.primary_node) {
-        //     primary_device.gbm.clone()
-        // } else {
-        //     bail!("no allocator available for device");
-        // };
         let gbm_flags = GbmBufferFlags::RENDERING | GbmBufferFlags::SCANOUT;
         let allocator = GbmAllocator::new(allocator_gbm, gbm_flags);
 
+        let handle = loop_handle.clone();
         let token = loop_handle.insert_source(drm_notifier, move |event, meta, state| {
-            state.backend.as_tty().on_drm_event(event, node, meta);
-        })?;
+            match event {
+                DrmEvent::VBlank(crtc) => {
+                    let meta = meta.expect("VBlank events must have metadata");
+                    let space = &mut state.compositor.space;
+                    let tty = match &mut state.backend {
+                        Backend::Udev(tty) => tty,
+                        _ => unreachable!(),
+                    };
+                    tty.on_vblank(space, node, crtc, meta);
 
-        // let drm_lease_state = DrmLeaseState::new::<State>(&niri.display_handle, &node)
-        //     .map_err(|err| warn!("error initializing DRM leasing for {node}: {err:?}"))
-        //     .ok();
+                    // Schedule the next render after this VBlank.
+                    let h = handle.clone();
+                    let h_clone = h.clone();
+                    let timer = Timer::immediate();
+                    let _ = h.insert_source(timer, move |_, _, state: &mut Hazel| {
+                        let space = &mut state.compositor.space;
+                        let tty = match &mut state.backend {
+                            Backend::Udev(tty) => tty,
+                            _ => return TimeoutAction::Drop,
+                        };
+                        tty.render_and_queue(space, node, crtc, h_clone.clone());
+                        TimeoutAction::Drop
+                    });
+                }
+                DrmEvent::Error(error) => warn!("DRM error: {error}"),
+            }
+        })?;
 
         let device = OutputDevice {
             token,
@@ -313,10 +301,147 @@ impl HazelTtyBackend {
             drm,
             gbm,
             allocator,
+            drm_scanner: DrmScanner::new(),
+            surfaces: HashMap::new(),
         };
 
         self.output_devices.insert(node, device);
 
+        self.scan_device_connectors(node);
+
+        // Kickstart each surface with an immediate timer.
+        let crtcs: Vec<crtc::Handle> = self
+            .output_devices
+            .get(&node)
+            .map(|d| d.surfaces.keys().copied().collect())
+            .unwrap_or_default();
+        for &crtc in &crtcs {
+            let handle = loop_handle.clone();
+            let timer = Timer::immediate();
+            let _ = loop_handle.insert_source(timer, move |_, _, state: &mut Hazel| {
+                let space = &mut state.compositor.space;
+                let tty = match &mut state.backend {
+                    Backend::Udev(tty) => tty,
+                    _ => return TimeoutAction::Drop,
+                };
+                tty.render_and_queue(space, node, crtc, handle.clone());
+                TimeoutAction::Drop
+            });
+        }
+
         Ok(())
     }
+
+    pub fn scan_device_connectors(&mut self, node: DrmNode) {
+        let Some(device) = self.output_devices.get_mut(&node) else {
+            error!("scan_device_connectors: device not found");
+            return;
+        };
+
+        let scan_result = match device.drm_scanner.scan_connectors(&device.drm) {
+            Ok(r) => r,
+            Err(e) => {
+                error!("Error scanning connectors on device {node:?}: {e}");
+                return;
+            }
+        };
+
+        for event in scan_result {
+            match event {
+                DrmScanEvent::Connected { connector, crtc: Some(crtc) } => {
+                    let connector_name = format_connector_name(&connector);
+                    info!("Connector connected: {} (CRTC: {crtc:?})", connector_name);
+
+                    let Some(drm_mode) = pick_mode(&connector) else {
+                        error!("No valid mode for connector {connector_name}");
+                        continue;
+                    };
+
+                    info!("Picked mode: {}x{}@{}", drm_mode.size().0, drm_mode.size().1, drm_mode.vrefresh());
+
+                    let (physical_width, physical_height) = connector.size().unwrap_or((0, 0));
+                    let output = Output::new(
+                        connector_name.clone(),
+                        PhysicalProperties {
+                            size: (physical_width as i32, physical_height as i32).into(),
+                            subpixel: connector.subpixel().into(),
+                            make: "Unknown".to_owned(),
+                            model: "Unknown".to_owned(),
+                        },
+                    );
+
+                    let wl_mode = OutputMode::from(drm_mode);
+                    output.change_current_state(Some(wl_mode), None, None, None);
+                    output.set_preferred(wl_mode);
+
+                    let drm_surface = match device.drm.create_surface(crtc, drm_mode, &[connector.handle()]) {
+                        Ok(s) => s,
+                        Err(e) => {
+                            error!("Failed to create DRM surface: {e}");
+                            continue;
+                        }
+                    };
+
+                    let render_formats = SUPPORTED_COLOR_FORMATS
+                        .iter()
+                        .map(|&code| Format { code, modifier: Modifier::Invalid });
+
+                    let compositor = match DrmCompositor::new(
+                        OutputModeSource::Auto(output.clone()),
+                        drm_surface,
+                        None, // auto-detect planes
+                        device.allocator.clone(),
+                        GbmFramebufferExporter::new(device.gbm.clone(), device.render_node),
+                        SUPPORTED_COLOR_FORMATS,
+                        render_formats,
+                        device.drm.cursor_size(),
+                        Some(device.gbm.clone()),
+                    ) {
+                        Ok(c) => c,
+                        Err(e) => {
+                            error!("Failed to create DRM compositor: {e:?}");
+                            continue;
+                        }
+                    };
+
+                    let surface = Surface {
+                        compositor,
+                        connector: connector.handle(),
+                        output: output.clone(),
+                    };
+
+                    device.surfaces.insert(crtc, surface);
+                    info!("Output created for connector {connector_name}");
+                }
+                DrmScanEvent::Connected { .. } => {
+                    info!("Connector connected but no CRTC assigned yet");
+                }
+                DrmScanEvent::Disconnected { connector, crtc } => {
+                    let connector_name = format_connector_name(&connector);
+                    info!("Connector disconnected: {} (CRTC: {crtc:?})", connector_name);
+
+                    if let Some(crtc) = crtc {
+                        if let Some(mut surface) = device.surfaces.remove(&crtc) {
+                            if let Err(e) = surface.compositor.clear() {
+                                error!("Error clearing compositor for {connector_name}: {e}");
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+fn pick_mode(connector: &smithay::reexports::drm::control::connector::Info) -> Option<DrmMode> {
+    let modes = connector.modes();
+    modes
+        .iter()
+        .find(|m| m.mode_type().contains(ModeTypeFlags::PREFERRED))
+        .cloned()
+        .or_else(|| modes.iter().next().cloned())
+}
+
+fn format_connector_name(connector: &smithay::reexports::drm::control::connector::Info) -> String {
+    format!("{}-{}", connector.interface().as_str(), connector.interface_id())
 }

@@ -17,6 +17,8 @@ use smithay::{
 
 use smithay::reexports::wayland_protocols_misc::server_decoration::server::org_kde_kwin_server_decoration_manager::Mode;
 
+use tracing::info;
+
 use crate::core::{
     Hazel, HazelEventLoop, client_state::ClientState, input::pointer::PointerAbsoluteMapping,
 };
@@ -27,7 +29,7 @@ pub struct HazelCompositor {
     pub smithay: HazelSmithay,
     pub seats: HashMap<String, Seat<Hazel>>,
     pub device_to_seat: HashMap<String, String>,
-	pub pointer_pressed: HashMap<PointerHandle<Hazel>, Vec<u32>>,
+    pub pointer_pressed: HashMap<PointerHandle<Hazel>, Vec<u32>>,
     pub pointer_mapping: HashMap<PointerHandle<Hazel>, PointerAbsoluteMapping>,
     pub pointer_absolute_previous: HashMap<PointerHandle<Hazel>, Point<f64, Logical>>,
 }
@@ -76,7 +78,7 @@ impl HazelCompositor {
             seats: HashMap::new(),
             device_to_seat: HashMap::new(),
             pointer_mapping: HashMap::new(),
-			pointer_pressed: HashMap::new(),
+            pointer_pressed: HashMap::new(),
             pointer_absolute_previous: HashMap::new(),
         }
     }
@@ -88,7 +90,7 @@ impl HazelCompositor {
 
         loop_handle
             .insert_source(listening_socket, move |client_stream, _, state| {
-                println!("New client connection");
+                info!("New client connection");
                 state
                     .display_handle
                     .insert_client(client_stream, Arc::new(ClientState::default()))
@@ -105,12 +107,18 @@ impl HazelCompositor {
             .and_then(|seat_name| self.seats.get(seat_name).cloned())
     }
 
-    pub fn get_pointer_handle(&self, device_id: &str) -> Option<(Seat<Hazel>, PointerHandle<Hazel>)> {
+    pub fn get_pointer_handle(
+        &self,
+        device_id: &str,
+    ) -> Option<(Seat<Hazel>, PointerHandle<Hazel>)> {
         self.get_seat_of(device_id)
             .and_then(|seat| seat.get_pointer().map(|pointer| (seat, pointer)))
     }
 
-    pub fn get_keyboard_handle(&self, device_id: &str) -> Option<(Seat<Hazel>, KeyboardHandle<Hazel>)> {
+    pub fn get_keyboard_handle(
+        &self,
+        device_id: &str,
+    ) -> Option<(Seat<Hazel>, KeyboardHandle<Hazel>)> {
         self.get_seat_of(device_id)
             .and_then(|seat| seat.get_keyboard().map(|keyboard| (seat, keyboard)))
     }

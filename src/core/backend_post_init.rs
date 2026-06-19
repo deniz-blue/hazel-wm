@@ -1,5 +1,5 @@
 use crate::{
-    backend::{Backend, tty::HazelTtyBackend, winit::HazelWinitBackend},
+    backend::{Backend, winit::HazelWinitBackend},
     core::Hazel,
 };
 
@@ -10,9 +10,14 @@ impl Hazel {
                 let _global = output.create_global::<Hazel>(&self.display_handle);
                 self.compositor.space.map_output(&output, (0, 0));
             }
-			Backend::Udev(HazelTtyBackend { .. }) => {
-
-			}
+            Backend::Udev(ref mut backend) => {
+                for device in backend.output_devices.values() {
+                    for surface in device.surfaces.values() {
+                        let _global = surface.output.create_global::<Hazel>(&self.display_handle);
+                        self.compositor.space.map_output(&surface.output, (0, 0));
+                    }
+                }
+            }
         };
 
         Ok(())

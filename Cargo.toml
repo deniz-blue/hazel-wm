@@ -15,6 +15,7 @@ mlua = { version = "0.11.6", features = [
 mlua-pkg = "0.3.0"
 calloop-notify = "0.2.0"
 tracing = "0.1.44"
+smithay-drm-extras = { version = "0.1.0", default-features = false }
 
 [dependencies.smithay]
 version = "0.7.0"

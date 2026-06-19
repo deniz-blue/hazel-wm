@@ -13,6 +13,7 @@ use smithay::{
         },
     },
 };
+use tracing::info;
 
 use crate::{core::Hazel, lua::api::wm_windows::WmWindow};
 
@@ -24,7 +25,7 @@ impl XdgShellHandler for Hazel {
     fn new_toplevel(&mut self, surface: ToplevelSurface) {
         let window = Window::new_wayland_window(surface);
 
-        println!(
+        info!(
             "New toplevel: {:?}",
             window.toplevel().unwrap().wl_surface().id()
         );
@@ -41,7 +42,7 @@ impl XdgShellHandler for Hazel {
     }
 
     fn new_popup(&mut self, surface: PopupSurface, _positioner: PositionerState) {
-        println!("New popup: {:?}", surface.wl_surface().id());
+        info!("New popup: {:?}", surface.wl_surface().id());
 
         // self.compositor.unconstrain_popup(&surface);
         let _ = self
@@ -57,7 +58,7 @@ impl XdgShellHandler for Hazel {
         positioner: PositionerState,
         token: u32,
     ) {
-        println!(
+        info!(
             "Reposition request for popup: {:?}",
             surface.wl_surface().id()
         );

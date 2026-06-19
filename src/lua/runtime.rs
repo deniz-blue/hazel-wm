@@ -2,6 +2,7 @@ use std::{path::Path, process::Stdio, rc::Rc};
 
 use calloop_notify::notify::{RecursiveMode, Watcher};
 use mlua::{IntoLua, Lua, Result as LuaResult};
+use tracing::{error, info};
 
 use crate::{
     core::{GlobalHazel, HazelEventLoop},
@@ -118,9 +119,9 @@ impl HazelLua {
 
                 GlobalHazel::execute(state, |hazel| {
                     if let Err(e) = hazel.lua.init() {
-                        eprintln!("Error reloading Lua: {e}");
+                        error!("Error reloading Lua: {e}");
                     } else {
-                        println!("Reloaded Lua");
+                        info!("Reloaded Lua");
                     }
                 });
             })

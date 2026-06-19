@@ -1,6 +1,7 @@
 use std::{cell::RefCell, collections::HashMap};
 
 use mlua::{Function, IntoLuaMulti, RegistryKey, UserData};
+use tracing::error;
 
 use crate::core::GlobalHazel;
 
@@ -44,11 +45,11 @@ impl LuaEventHandler {
             for handler in handlers {
                 if let Ok(handler_fn) = lua.registry_value::<Function>(handler) {
                     if let Err(e) = handler_fn.call::<mlua::Value>(args.clone()) {
-                        eprintln!(
+                        error!(
                             "Error occurred while calling event handler for event: {}",
                             event_name
                         );
-						eprintln!("Error details: {}", e);
+						error!("Error details: {}", e);
                     }
                 }
             }

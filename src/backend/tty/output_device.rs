@@ -1,10 +1,31 @@
+use std::collections::HashMap;
+
 use smithay::{
     backend::{
         allocator::gbm::{GbmAllocator, GbmDevice},
-        drm::{DrmDevice, DrmDeviceFd, DrmNode},
+        drm::{
+            DrmDevice, DrmDeviceFd, DrmNode,
+            compositor::DrmCompositor,
+            exporter::gbm::GbmFramebufferExporter,
+        },
     },
-    reexports::calloop::RegistrationToken,
+    output::Output,
+    reexports::{calloop::RegistrationToken, drm::control::connector, drm::control::crtc},
 };
+use smithay_drm_extras::drm_scanner::DrmScanner;
+
+pub type HazelDrmCompositor = DrmCompositor<
+    GbmAllocator<DrmDeviceFd>,
+    GbmFramebufferExporter<DrmDeviceFd>,
+    (),
+    DrmDeviceFd,
+>;
+
+pub struct Surface {
+    pub compositor: HazelDrmCompositor,
+    pub connector: connector::Handle,
+    pub output: Output,
+}
 
 pub struct OutputDevice {
     pub token: RegistrationToken,
@@ -12,4 +33,6 @@ pub struct OutputDevice {
     pub drm: DrmDevice,
     pub gbm: GbmDevice<DrmDeviceFd>,
     pub allocator: GbmAllocator<DrmDeviceFd>,
+    pub drm_scanner: DrmScanner,
+    pub surfaces: HashMap<crtc::Handle, Surface>,
 }
