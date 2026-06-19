@@ -1,15 +1,19 @@
-use std::time::Duration;
+use std::{
+    sync::OnceLock,
+    time::Duration,
+};
 
 use smithay::{
     backend::{
+        allocator::Fourcc,
         drm::{DrmNode, compositor::FrameFlags},
         renderer::{
             element::{
                 AsRenderElements, Kind,
-                solid::{SolidColorBuffer, SolidColorRenderElement},
+                memory::{MemoryBuffer, MemoryRenderBuffer, MemoryRenderBufferRenderElement},
                 surface::WaylandSurfaceRenderElement,
             },
-            ImportAll,
+            ImportAll, ImportMem,
         },
     },
     desktop::space::SurfaceTree,
@@ -18,7 +22,7 @@ use smithay::{
         calloop::{LoopHandle, timer::{TimeoutAction, Timer}},
         drm::control::crtc::Handle as CrtcHandle,
     },
-    utils::{IsAlive, Scale},
+    utils::{IsAlive, Scale, Size, Transform},
 };
 use tracing::{info, trace};
 
@@ -27,10 +31,21 @@ use crate::{backend::Backend, core::Hazel};
 // ── Unified element type ───────────────────────────────────────────────────
 
 smithay::backend::renderer::element::render_elements! {
-    pub HazelElement<R> where R: ImportAll;
+    pub HazelElement<R> where R: ImportAll + ImportMem;
     Space=WaylandSurfaceRenderElement<R>,
     Wrapped=smithay::backend::renderer::element::Wrap<WaylandSurfaceRenderElement<R>>,
-    Solid=SolidColorRenderElement,
+    Memory=MemoryRenderBufferRenderElement<R>,
+}
+
+const CURSOR_SIZE: i32 = 16;
+
+fn cursor_render_buffer() -> &'static MemoryRenderBuffer {
+    static BUF: OnceLock<MemoryRenderBuffer> = OnceLock::new();
+    BUF.get_or_init(|| {
+        let pixels = include_bytes!("../../assets/cursor.raw");
+        let mem = MemoryBuffer::from_slice(pixels, Fourcc::Argb8888, (CURSOR_SIZE, CURSOR_SIZE));
+        MemoryRenderBuffer::from_memory(mem, 1, Transform::Normal, None)
+    })
 }
 
 // ── Render entry point ─────────────────────────────────────────────────────
@@ -70,7 +85,7 @@ impl Hazel {
         // ── Cursor ─────────────────────────────────────────────────────────
         // render_output() reverses the element slice and draws back-to-front,
         // so front-most elements must come FIRST.
-        let solid_cursor = SolidColorBuffer::new((16, 16), [1.0, 1.0, 1.0, 1.0]);
+        let cursor_buf = cursor_render_buffer();
 
         let mut elements: Vec<HazelElement<_>> = Vec::new();
 
@@ -93,9 +108,20 @@ impl Hazel {
 
             match &state.cursor_status {
                 CursorImageStatus::Surface(surf) if surf.alive() => {
+                    // Offset by the cursor hotspot so the pointer tip
+                    // matches where the user clicked.
+                    let hotspot = smithay::wayland::compositor::with_states(surf, |states| {
+                        states
+                            .data_map
+                            .get::<smithay::input::pointer::CursorImageSurfaceData>()
+                            .map(|d| d.lock().unwrap().hotspot)
+                    })
+                    .unwrap_or_default();
+
+                    let pos = cursor_phys - hotspot.to_f64().to_physical(scale).to_i32_round();
                     let tree = SurfaceTree::from_surface(surf);
                     let els: Vec<HazelElement<_>> = tree
-                        .render_elements(&mut renderer, cursor_phys, scale, 1.0)
+                        .render_elements(&mut renderer, pos, scale, 1.0)
                         .into_iter()
                         .map(HazelElement::Space)
                         .collect();
@@ -103,17 +129,24 @@ impl Hazel {
                     trace!("cursor: surface");
                 }
                 _ => {
-                    trace!("cursor: fallback cross");
-                    let el = HazelElement::Solid(
-                        SolidColorRenderElement::from_buffer(
-                            &solid_cursor,
-                            cursor_phys,
-                            1.0,
-                            1.0,
-                            Kind::Cursor,
-                        ),
+                    trace!("cursor: fallback");
+                    let hotspot = CURSOR_SIZE / 2;
+                    let pos = (
+                        (cursor_phys.x - hotspot) as f64,
+                        (cursor_phys.y - hotspot) as f64,
                     );
-                    elements.push(el);
+                    let el = MemoryRenderBufferRenderElement::from_buffer(
+                        &mut renderer,
+                        pos,
+                        cursor_buf,
+                        None,
+                        None,
+                        Some(Size::from((CURSOR_SIZE, CURSOR_SIZE))),
+                        Kind::Cursor,
+                    );
+                    if let Ok(el) = el {
+                        elements.push(HazelElement::Memory(el));
+                    }
                 }
             }
         }
