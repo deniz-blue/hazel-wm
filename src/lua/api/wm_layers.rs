@@ -1,6 +1,6 @@
 use mlua::UserData;
 use smithay::{
-    desktop::{layer_map_for_output, LayerSurface as DesktopLayerSurface, WindowSurfaceType},
+    desktop::{LayerSurface as DesktopLayerSurface, WindowSurfaceType, layer_map_for_output},
     utils::Logical,
     wayland::shell::wlr_layer::Layer as LayerDepth,
 };
@@ -159,11 +159,19 @@ impl LayerHandle {
 
     pub fn output(&self) -> Option<WmOutputHandle> {
         let outputs = crate::core::GlobalHazel::with(|hazel| {
-            hazel.compositor.space.outputs().cloned().collect::<Vec<_>>()
+            hazel
+                .compositor
+                .space
+                .outputs()
+                .cloned()
+                .collect::<Vec<_>>()
         });
         for output in &outputs {
             let map = layer_map_for_output(output);
-            if map.layer_for_surface(self.0.wl_surface(), WindowSurfaceType::TOPLEVEL).is_some() {
+            if map
+                .layer_for_surface(self.0.wl_surface(), WindowSurfaceType::TOPLEVEL)
+                .is_some()
+            {
                 return Some(WmOutputHandle::new(output));
             }
         }

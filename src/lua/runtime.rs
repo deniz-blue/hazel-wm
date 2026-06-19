@@ -61,7 +61,7 @@ impl HazelLua {
                         .stderr(Stdio::null())
                         .stdin(Stdio::null())
                         .spawn()
-                        .map_err(|e| mlua::Error::external(e))?;
+                        .map_err(mlua::Error::external)?;
                     Ok(())
                 })?,
         )?;
@@ -73,7 +73,7 @@ impl HazelLua {
                     let output = std::process::Command::new(cmd)
                         .args(args.unwrap_or_default())
                         .output()
-                        .map_err(|e| mlua::Error::external(e))?;
+                        .map_err(mlua::Error::external)?;
                     Ok(lua.create_table_from([
                         (
                             "stdout",

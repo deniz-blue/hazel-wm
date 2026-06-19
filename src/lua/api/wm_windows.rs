@@ -21,9 +21,10 @@ impl UserData for WmWindows {
     fn add_methods<M: mlua::prelude::LuaUserDataMethods<Self>>(methods: &mut M) {
         impl_lua_event_handler!(methods);
 
-        methods.add_method("count", |_, _, _: ()| {
-            with_hazel!(hazel => Ok(hazel.compositor.space.elements().count()))
-        });
+        methods.add_method(
+            "count",
+            |_, _, _: ()| with_hazel!(hazel => Ok(hazel.compositor.space.elements().count())),
+        );
 
         methods.add_method("get", |_, _, index: usize| {
             with_hazel!(hazel => {
@@ -169,12 +170,14 @@ impl UserData for WmWindow {
     fn add_methods<M: mlua::prelude::LuaUserDataMethods<Self>>(methods: &mut M) {
         methods.add_method("position", |_, this, _: ()| Ok(this.get_position()));
         methods.add_method("set_position", |_, this, position: LuaPoint<_, _>| {
-            Ok(this.set_position(position))
+            let _: () = this.set_position(position);
+            Ok(())
         });
 
         methods.add_method("size", |_, this, _: ()| Ok(this.get_size()));
         methods.add_method("set_size", |_, this, size: LuaSize<_, _>| {
-            Ok(this.set_size(size))
+            let _: () = this.set_size(size);
+            Ok(())
         });
 
         methods.add_method("title", |_, this, _: ()| Ok(this.title()));
@@ -231,26 +234,29 @@ impl WindowStates {
     /// Known state names: "maximized", "fullscreen", "resizing", "activated",
     /// "tiled_left", "tiled_right", "tiled_top", "tiled_bottom", "suspended".
     pub fn set(&self, name: &str, enabled: bool) {
-        if let Some(state) = state_from_name(name) {
-            if let Some(toplevel) = self.0.toplevel() {
-                toplevel.with_pending_state(|s| {
-                    if enabled {
-                        s.states.set(state);
-                    } else {
-                        s.states.unset(state);
-                    }
-                });
-                toplevel.send_configure();
-            }
+        if let Some(state) = state_from_name(name)
+            && let Some(toplevel) = self.0.toplevel()
+        {
+            toplevel.with_pending_state(|s| {
+                if enabled {
+                    s.states.set(state);
+                } else {
+                    s.states.unset(state);
+                }
+            });
+            toplevel.send_configure();
         }
     }
 
     pub fn has(&self, name: &str) -> bool {
         if let Some(target) = state_from_name(name) {
-            self.0.toplevel().map(|toplevel| {
-                let state = toplevel.current_state();
-                state.states.contains(target)
-            }).unwrap_or(false)
+            self.0
+                .toplevel()
+                .map(|toplevel| {
+                    let state = toplevel.current_state();
+                    state.states.contains(target)
+                })
+                .unwrap_or(false)
         } else {
             false
         }

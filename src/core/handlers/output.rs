@@ -4,9 +4,13 @@ use tracing::info;
 use crate::core::Hazel;
 
 impl OutputHandler for Hazel {
-	fn output_bound(&mut self, _output: smithay::output::Output, _wl_output: smithay::reexports::wayland_server::protocol::wl_output::WlOutput) {
-		info!("Output bound: {}", _output.name());
-	}
+    fn output_bound(
+        &mut self,
+        _output: smithay::output::Output,
+        _wl_output: smithay::reexports::wayland_server::protocol::wl_output::WlOutput,
+    ) {
+        info!("Output bound: {}", _output.name());
+    }
 }
 
 smithay::delegate_output!(Hazel);

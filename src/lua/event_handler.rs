@@ -43,14 +43,14 @@ impl LuaEventHandler {
         let args = args.into_lua_multi(lua)?;
         if let Some(handlers) = self.handlers.borrow_mut().get(&event_name) {
             for handler in handlers {
-                if let Ok(handler_fn) = lua.registry_value::<Function>(handler) {
-                    if let Err(e) = handler_fn.call::<mlua::Value>(args.clone()) {
-                        error!(
-                            "Error occurred while calling event handler for event: {}",
-                            event_name
-                        );
-						error!("Error details: {}", e);
-                    }
+                if let Ok(handler_fn) = lua.registry_value::<Function>(handler)
+                    && let Err(e) = handler_fn.call::<mlua::Value>(args.clone())
+                {
+                    error!(
+                        "Error occurred while calling event handler for event: {}",
+                        event_name
+                    );
+                    error!("Error details: {}", e);
                 }
             }
         }
@@ -80,7 +80,7 @@ impl UserData for LuaEventHandler {
 #[macro_export]
 macro_rules! impl_lua_event_source {
     ($t:ident) => {
-        impl crate::lua::event_handler::LuaEventSource for $t {
+        impl $crate::lua::event_handler::LuaEventSource for $t {
             fn events(&self) -> &crate::lua::event_handler::LuaEventHandler {
                 &self.events
             }
@@ -94,7 +94,7 @@ macro_rules! impl_lua_event_handler {
         $methods.add_method(
             "on",
             |lua: &mlua::Lua, this, (event_name, handler): (String, mlua::Function)| {
-                use crate::lua::event_handler::LuaEventSource;
+                use $crate::lua::event_handler::LuaEventSource;
                 this.events().add_function(lua, event_name, handler)
             },
         );

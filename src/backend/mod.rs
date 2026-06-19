@@ -31,9 +31,8 @@ impl Backend {
     }
 
     pub fn switch_vt(&mut self, vt: u32) -> Result<(), Box<dyn std::error::Error>> {
-        match self {
-            Self::Udev(backend) => backend.session.change_vt(vt as i32)?,
-            _ => {}
+        if let Self::Udev(backend) = self {
+            backend.session.change_vt(vt as i32)?
         }
 
         Ok(())

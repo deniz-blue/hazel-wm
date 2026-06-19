@@ -1,16 +1,20 @@
 use smithay::{
     backend::renderer::utils::on_commit_buffer_handler,
-    desktop::{layer_map_for_output, WindowSurfaceType},
+    desktop::{WindowSurfaceType, layer_map_for_output},
     reexports::wayland_server::{Client, Resource, protocol::wl_surface::WlSurface},
     wayland::compositor::{
         CompositorClientState, CompositorHandler, CompositorState, get_parent, is_sync_subsurface,
     },
 };
 
-use crate::core::{Hazel, client_state::ClientState, handlers::{layer_shell, xdg_shell}};
+use crate::core::{
+    Hazel,
+    client_state::ClientState,
+    handlers::{layer_shell, xdg_shell},
+};
 
 impl CompositorHandler for Hazel {
-    fn compositor_state<'a>(&'a mut self) -> &'a mut CompositorState {
+    fn compositor_state(&mut self) -> &mut CompositorState {
         &mut self.compositor.smithay.compositor_state
     }
 
@@ -35,7 +39,11 @@ impl CompositorHandler for Hazel {
             }
         };
 
-        xdg_shell::handle_commit(&mut self.compositor.smithay.popups, &self.compositor.space, surface);
+        xdg_shell::handle_commit(
+            &mut self.compositor.smithay.popups,
+            &self.compositor.space,
+            surface,
+        );
         // resize_grab::handle_commit(&mut self.compositor.space, surface);
 
         // Handle layer-surface commits — find which output this surface belongs to.
@@ -52,7 +60,10 @@ impl CompositorHandler for Hazel {
             drop(map);
         }
 
-		self.wm().events.emit("commit".to_string(), surface.id().protocol_id()).unwrap();
+        self.wm()
+            .events
+            .emit("commit".to_string(), surface.id().protocol_id())
+            .unwrap();
     }
 }
 

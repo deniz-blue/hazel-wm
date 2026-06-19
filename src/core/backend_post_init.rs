@@ -8,7 +8,7 @@ impl Hazel {
         match self.backend {
             Backend::Winit(HazelWinitBackend { ref output }) => {
                 let _global = output.create_global::<Hazel>(&self.display_handle);
-                self.compositor.space.map_output(&output, (0, 0));
+                self.compositor.space.map_output(output, (0, 0));
             }
             Backend::Udev(ref mut backend) => {
                 for device in backend.output_devices.values() {

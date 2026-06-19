@@ -3,8 +3,8 @@ use smithay::{
     input::keyboard::{FilterResult, keysyms},
     utils::SERIAL_COUNTER,
 };
-use tracing::{error, info};
 use std::error::Error as StdError;
+use tracing::{error, info};
 
 use crate::{core::Hazel, lua::api::wm_input_keyboard::KeyEvent};
 
@@ -33,7 +33,7 @@ impl Hazel {
                     keycode,
                     keysym: kh.modified_sym(),
                     keysyms: kh.modified_syms(),
-                    modifiers: modifiers.clone(),
+                    modifiers: *modifiers,
                     state,
                     serial,
                     time,

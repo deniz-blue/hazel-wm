@@ -85,7 +85,7 @@ impl<N: Unit, Kind: 'static> UserData for LuaPoint<N, Kind> {
         crate::lua_display_metamethods!(methods);
 
         methods.add_method_mut("add", |_, this, other: Self| {
-            this.0 = this.0 + other.0;
+            this.0 += other.0;
             Ok(())
         });
 

@@ -11,7 +11,10 @@ use smithay::{
 };
 
 use crate::{
-    core::{Hazel, input::pointer::{PointerAbsoluteMapping, PointerState}},
+    core::{
+        Hazel,
+        input::pointer::{PointerAbsoluteMapping, PointerState},
+    },
     lua::{
         api::wm_input_pointer::{PointerButtonEvent, PointerMoveEvent},
         ext::LuaErrorExt,
@@ -32,14 +35,11 @@ impl Hazel {
         let (seat, pointer) = self.compositor.get_pointer_handle(&device_id).unwrap();
         let pointer_pos = pointer.current_location();
 
-        // Check layer surfaces first (panels, bars, etc.), then windows.
         if let Some((surface, _)) = self.compositor.layer_surface_under(pointer_pos) {
             if let Some(keyboard) = seat.get_keyboard() {
                 keyboard.set_focus(self, Some(surface), serial);
             }
-        } else if let Some((window, surface, _)) =
-            self.compositor.surface_under(pointer_pos)
-        {
+        } else if let Some((window, surface, _)) = self.compositor.surface_under(pointer_pos) {
             self.compositor.space.raise_element(&window, true);
             if let Some(keyboard) = seat.get_keyboard() {
                 keyboard.set_focus(self, Some(surface), serial);
@@ -97,11 +97,9 @@ impl Hazel {
         let (_, pointer) = self.compositor.get_pointer_handle(&device_id).unwrap();
 
         let new_position = pointer.current_location() + delta;
-        // Check layer surfaces first, then windows.
         let under = self
             .compositor
             .layer_surface_under(new_position)
-            .map(|(surface, point)| (surface, point))
             .or_else(|| {
                 self.compositor
                     .surface_under(new_position)
@@ -179,16 +177,11 @@ impl Hazel {
         let location = location_output + coordinate_space.loc.to_f64();
         let utime = event.time();
 
-        // Check layer surfaces first, then windows.
-        let under = self
-            .compositor
-            .layer_surface_under(location)
-            .map(|(surface, point)| (surface, point))
-            .or_else(|| {
-                self.compositor
-                    .surface_under(location)
-                    .map(|(_, surface, point)| (surface, point))
-            });
+        let under = self.compositor.layer_surface_under(location).or_else(|| {
+            self.compositor
+                .surface_under(location)
+                .map(|(_, surface, point)| (surface, point))
+        });
 
         let delta = location_output - previous_output_position;
 

@@ -1,10 +1,10 @@
 pub mod compositor;
 pub mod data_device;
 pub mod dnd_grab;
+pub mod kde;
+pub mod layer_shell;
 pub mod output;
 pub mod seat;
 pub mod selection;
 pub mod shm;
 pub mod xdg_shell;
-pub mod kde;
-pub mod layer_shell;

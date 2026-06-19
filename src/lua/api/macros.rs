@@ -21,7 +21,7 @@ macro_rules! lua_debug_metamethods {
             Ok(format!("{this:?}"))
         });
 
-        crate::lua_concat!($methods);
+        $crate::lua_concat!($methods);
     };
 }
 
@@ -32,6 +32,6 @@ macro_rules! lua_display_metamethods {
             Ok(format!("{this}"))
         });
 
-        crate::lua_concat!($methods);
+        $crate::lua_concat!($methods);
     };
 }

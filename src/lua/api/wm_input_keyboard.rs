@@ -52,7 +52,7 @@ impl UserData for WmInputKeyboard {
                     warn!("Failed to set keyboard layout to \"{}\": {}", keymap, e);
                 }
 
-                return Ok(result.is_ok());
+                Ok(result.is_ok())
             })
         });
     }
@@ -87,7 +87,7 @@ impl KeyEvent {
     }
 
     pub fn is_default_prevented(&self) -> bool {
-        self.default_prevented.borrow().clone()
+        *self.default_prevented.borrow()
     }
 }
 
@@ -109,7 +109,7 @@ impl UserData for KeyEvent {
                 .collect::<Vec<_>>())
         });
         fields.add_field_method_get("modifiers", |_, this| {
-            Ok(ModifiersStateUserData(this.modifiers.clone()))
+            Ok(ModifiersStateUserData(this.modifiers))
         });
     }
 

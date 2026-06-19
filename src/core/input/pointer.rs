@@ -15,6 +15,12 @@ pub struct PointerState {
     pub cursor_status: CursorImageStatus,
 }
 
+impl Default for PointerState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl PointerState {
     pub fn new() -> Self {
         Self {

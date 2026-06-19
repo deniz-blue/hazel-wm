@@ -4,8 +4,7 @@ use smithay::{
     backend::{
         allocator::gbm::{GbmAllocator, GbmDevice},
         drm::{
-            DrmDevice, DrmDeviceFd, DrmNode,
-            compositor::DrmCompositor,
+            DrmDevice, DrmDeviceFd, DrmNode, compositor::DrmCompositor,
             exporter::gbm::GbmFramebufferExporter,
         },
     },
@@ -14,12 +13,8 @@ use smithay::{
 };
 use smithay_drm_extras::drm_scanner::DrmScanner;
 
-pub type HazelDrmCompositor = DrmCompositor<
-    GbmAllocator<DrmDeviceFd>,
-    GbmFramebufferExporter<DrmDeviceFd>,
-    (),
-    DrmDeviceFd,
->;
+pub type HazelDrmCompositor =
+    DrmCompositor<GbmAllocator<DrmDeviceFd>, GbmFramebufferExporter<DrmDeviceFd>, (), DrmDeviceFd>;
 
 pub struct Surface {
     pub compositor: HazelDrmCompositor,

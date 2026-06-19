@@ -1,7 +1,7 @@
 use std::{collections::HashMap, ffi::OsString, sync::Arc};
 
 use smithay::{
-    desktop::{layer_map_for_output, PopupManager, Space, Window, WindowSurfaceType},
+    desktop::{PopupManager, Space, Window, WindowSurfaceType, layer_map_for_output},
     input::{Seat, SeatState, keyboard::KeyboardHandle, pointer::PointerHandle},
     reexports::wayland_server::{DisplayHandle, protocol::wl_surface::WlSurface},
     utils::{Logical, Point},
@@ -23,9 +23,7 @@ use smithay::reexports::wayland_protocols_misc::server_decoration::server::org_k
 
 use tracing::info;
 
-use crate::core::{
-    Hazel, HazelEventLoop, client_state::ClientState, input::pointer::PointerState,
-};
+use crate::core::{Hazel, HazelEventLoop, client_state::ClientState, input::pointer::PointerState};
 
 pub struct HazelCompositor {
     pub socket_name: OsString,
@@ -50,14 +48,14 @@ pub struct HazelSmithay {
 
 impl HazelCompositor {
     pub fn new(event_loop: &mut HazelEventLoop, dh: &DisplayHandle) -> Self {
-        let compositor_state = CompositorState::new::<Hazel>(&dh);
-        let xdg_shell_state = XdgShellState::new::<Hazel>(&dh);
-        let layer_shell_state = WlrLayerShellState::new::<Hazel>(&dh);
-        let shm_state = ShmState::new::<Hazel>(&dh, vec![]);
+        let compositor_state = CompositorState::new::<Hazel>(dh);
+        let xdg_shell_state = XdgShellState::new::<Hazel>(dh);
+        let layer_shell_state = WlrLayerShellState::new::<Hazel>(dh);
+        let shm_state = ShmState::new::<Hazel>(dh, vec![]);
         let popups = PopupManager::default();
-        let kde_decoration_state = KdeDecorationState::new::<Hazel>(&dh, Mode::Client);
-        let output_manager_state = OutputManagerState::new_with_xdg_output::<Hazel>(&dh);
-        let data_device_state = DataDeviceState::new::<Hazel>(&dh);
+        let kde_decoration_state = KdeDecorationState::new::<Hazel>(dh, Mode::Client);
+        let output_manager_state = OutputManagerState::new_with_xdg_output::<Hazel>(dh);
+        let data_device_state = DataDeviceState::new::<Hazel>(dh);
         let seat_state = SeatState::new();
 
         let space = Space::default();
@@ -140,15 +138,17 @@ impl HazelCompositor {
         for output in self.space.outputs() {
             let geo = self.space.output_geometry(output)?;
             let local = pos - geo.loc.to_f64();
-            if local.x < 0.0 || local.y < 0.0 || local.x > geo.size.w as f64 || local.y > geo.size.h as f64 {
+            if local.x < 0.0
+                || local.y < 0.0
+                || local.x > geo.size.w as f64
+                || local.y > geo.size.h as f64
+            {
                 continue;
             }
             let map = layer_map_for_output(output);
             for layer in &[Layer::Overlay, Layer::Top, Layer::Bottom, Layer::Background] {
                 if let Some(layer_surface) = map.layer_under(*layer, local) {
-                    let layer_geo = map
-                        .layer_geometry(layer_surface)
-                        .unwrap_or_default();
+                    let layer_geo = map.layer_geometry(layer_surface).unwrap_or_default();
                     let surface = layer_surface.wl_surface().clone();
                     if let Some((s, p)) = layer_surface
                         .surface_under(local - layer_geo.loc.to_f64(), WindowSurfaceType::ALL)

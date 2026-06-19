@@ -1,25 +1,25 @@
-use std::{
-    sync::OnceLock,
-    time::Duration,
-};
+use std::{sync::OnceLock, time::Duration};
 
 use smithay::{
     backend::{
         allocator::Fourcc,
         drm::{DrmNode, compositor::FrameFlags},
         renderer::{
+            ImportAll, ImportMem,
             element::{
                 AsRenderElements, Kind,
                 memory::{MemoryBuffer, MemoryRenderBuffer, MemoryRenderBufferRenderElement},
                 surface::WaylandSurfaceRenderElement,
             },
-            ImportAll, ImportMem,
         },
     },
     desktop::{layer_map_for_output, space::SurfaceTree},
     input::pointer::CursorImageStatus,
     reexports::{
-        calloop::{LoopHandle, timer::{TimeoutAction, Timer}},
+        calloop::{
+            LoopHandle,
+            timer::{TimeoutAction, Timer},
+        },
         drm::control::crtc::Handle as CrtcHandle,
     },
     utils::{IsAlive, Scale, Size, Transform},
@@ -29,7 +29,7 @@ use tracing::{info, trace};
 
 use crate::{backend::Backend, core::Hazel};
 
-// ── Unified element type ───────────────────────────────────────────────────
+// Element type
 
 smithay::backend::renderer::element::render_elements! {
     pub HazelElement<R> where R: ImportAll + ImportMem;
@@ -49,7 +49,7 @@ fn cursor_render_buffer() -> &'static MemoryRenderBuffer {
     })
 }
 
-// ── Render entry point ─────────────────────────────────────────────────────
+// Render entry point
 
 impl Hazel {
     pub fn render_tty_output(
@@ -83,14 +83,14 @@ impl Hazel {
 
         let scale = Scale::from(output.current_scale().fractional_scale());
 
-        // ── Cursor ─────────────────────────────────────────────────────────
+        // Cursor
         // render_output() reverses the element slice and draws back-to-front,
         // so front-most elements must come FIRST.
         let cursor_buf = cursor_render_buffer();
 
         let mut elements: Vec<HazelElement<_>> = Vec::new();
 
-        for (_, seat) in &self.compositor.seats {
+        for seat in self.compositor.seats.values() {
             let Some(pointer) = seat.get_pointer() else {
                 continue;
             };
@@ -152,11 +152,6 @@ impl Hazel {
             }
         }
 
-        // ── Layer surfaces (panels, bars, etc.) ────────────────────────────
-        // Rendered in z-order: Background → Bottom → [windows] → Top → Overlay.
-        // Elements at the front of the vec are drawn last (on top), so:
-        //   cursor > overlay > top > space > bottom > background
-
         let mut bottom_layer_elements: Vec<HazelElement<_>> = Vec::new();
         let mut top_layer_elements: Vec<HazelElement<_>> = Vec::new();
 
@@ -197,10 +192,8 @@ impl Hazel {
                 top_layer_elements.extend(els);
             }
         }
-        // Drop the LayerMap lock before we use the renderer again.
         drop(layer_map);
 
-        // ── Space elements (windows) ───────────────────────────────────────
         use smithay::desktop::space::SpaceRenderElements;
         let space_elements: Vec<HazelElement<_>> = self
             .compositor
@@ -217,14 +210,12 @@ impl Hazel {
             })
             .collect();
 
-        // Build element slice: cursor (front) > top/overlay > space > bottom/background (back).
         elements.extend(top_layer_elements);
         elements.extend(space_elements);
         elements.extend(bottom_layer_elements);
 
         // Cursor remains first in the vec (front-most).
 
-        // ── Render & queue ─────────────────────────────────────────────────
         let clear_color = [0.2, 0.4, 0.8, 1.0];
         let queued = match surface.compositor.render_frame::<_, _>(
             &mut renderer,
@@ -232,20 +223,16 @@ impl Hazel {
             clear_color,
             FrameFlags::DEFAULT,
         ) {
-            Ok(result) if !result.is_empty => {
-                surface.compositor.queue_frame(()).is_ok()
-            }
+            Ok(result) if !result.is_empty => surface.compositor.queue_frame(()).is_ok(),
             _ => false,
         };
 
-        // Frame callbacks for windows
         for window in self.compositor.space.elements() {
             window.send_frame(&output, Duration::ZERO, Some(Duration::ZERO), |_, _| {
                 Some(output.clone())
             });
         }
 
-        // Frame callbacks for layer surfaces
         let layer_map = layer_map_for_output(&output);
         for layer_surface in layer_map.layers() {
             if layer_surface.alive() {

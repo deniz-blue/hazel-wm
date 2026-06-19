@@ -13,8 +13,8 @@ use smithay::{
     reexports::winit::window::WindowAttributes,
     utils::{Rectangle, Transform},
 };
-use tracing::{error, info};
 use std::error::Error as StdError;
+use tracing::{error, info};
 
 use crate::core::{GlobalHazel, HazelEventLoop};
 
@@ -123,7 +123,7 @@ impl HazelWinitBackend {
             })
             .map_err(|e| Box::new(e) as Box<dyn StdError>)?;
 
-		info!("Initialized Winit backend");
+        info!("Initialized Winit backend");
 
         Ok(Self { output })
     }

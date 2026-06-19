@@ -60,7 +60,12 @@ impl UserData for WmOutputs {
             GlobalHazel::try_with(|hazel| {
                 let idx = index.checked_sub(1);
                 Ok(idx.and_then(|i| {
-                    hazel.compositor.space.outputs().nth(i).map(|o| WmOutputHandle(o.downgrade()))
+                    hazel
+                        .compositor
+                        .space
+                        .outputs()
+                        .nth(i)
+                        .map(|o| WmOutputHandle(o.downgrade()))
                 }))
             })
         });
@@ -145,7 +150,10 @@ impl WmOutputHandle {
         if let Some(output) = self.0.upgrade() {
             output.change_current_state(None, None, None, Some(point.0.to_i32_round()));
             GlobalHazel::with(|hazel| {
-                hazel.compositor.space.map_output(&output, point.0.to_i32_round());
+                hazel
+                    .compositor
+                    .space
+                    .map_output(&output, point.0.to_i32_round());
             })
         }
     }
@@ -162,7 +170,7 @@ impl UserData for WmOutputHandle {
                 .upgrade()
                 .map(|o| -> Result<_, mlua::Error> {
                     let phys = o.physical_properties();
-                    Ok(HashMap::from([
+                    HashMap::from([
                         ("make".to_string(), phys.make.into_lua(lua)?),
                         ("model".to_string(), phys.model.into_lua(lua)?),
                         ("size".to_string(), LuaSize(phys.size).into_lua(lua)?),
@@ -171,7 +179,7 @@ impl UserData for WmOutputHandle {
                             format!("{:?}", phys.subpixel).into_lua(lua)?,
                         ),
                     ])
-                    .into_lua(lua)?)
+                    .into_lua(lua)
                 })
                 .transpose()
         });
@@ -180,7 +188,8 @@ impl UserData for WmOutputHandle {
     fn add_methods<M: mlua::prelude::LuaUserDataMethods<Self>>(methods: &mut M) {
         methods.add_method("position", |_, this, _: ()| Ok(this.position()));
         methods.add_method("set_position", |_, this, point: LuaPoint<_, _>| {
-            Ok(this.set_position(point))
+            let _: () = this.set_position(point);
+            Ok(())
         });
         methods.add_method("mode", |_, this, _: ()| Ok(this.current_mode()));
         methods.add_method("size", |_, this, _: ()| {

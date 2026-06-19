@@ -2,7 +2,16 @@ use smithay::utils::Logical;
 
 use crate::lua::{
     api::{
-        utils::{LuaPoint, LuaSize}, wm::Wm, wm_input::WmInput, wm_input_keyboard::{KeyEvent, ModifiersStateUserData, WmInputKeyboard}, wm_input_pointer::{PointerButtonEvent, PointerMoveEvent, WmInputPointer}, wm_input_seats::{WmInputSeats, WmSeat}, wm_input_sym::{LuaKeys, LuaKeysym, LuaMouseButton, LuaMouseButtons}, wm_layers::{LayerHandle, WmLayers}, wm_outputs::{LuaOutputMode, WmOutputHandle, WmOutputs}, wm_windows::{WmWindow, WmWindows, WindowStates}
+        utils::{LuaPoint, LuaSize},
+        wm::Wm,
+        wm_input::WmInput,
+        wm_input_keyboard::{KeyEvent, ModifiersStateUserData, WmInputKeyboard},
+        wm_input_pointer::{PointerButtonEvent, PointerMoveEvent, WmInputPointer},
+        wm_input_seats::{WmInputSeats, WmSeat},
+        wm_input_sym::{LuaKeys, LuaKeysym, LuaMouseButton, LuaMouseButtons},
+        wm_layers::{LayerHandle, WmLayers},
+        wm_outputs::{LuaOutputMode, WmOutputHandle, WmOutputs},
+        wm_windows::{WindowStates, WmWindow, WmWindows},
     },
     typedefs::LuaTypeDef,
 };
@@ -28,10 +37,10 @@ pub fn dump_typedefs() {
     Wm::dump();
 
     WmInput::dump();
-	WmInputSeats::dump();
+    WmInputSeats::dump();
     WmOutputs::dump();
 
-	WmSeat::dump();
+    WmSeat::dump();
     WmInputPointer::dump();
     LuaMouseButton::dump();
     LuaMouseButtons::dump();

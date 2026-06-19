@@ -6,7 +6,9 @@ use crate::{
     core::GlobalHazel,
     impl_lua_event_handler, impl_lua_event_source,
     lua::{
-        api::{wm_input::WmInput, wm_layers::WmLayers, wm_outputs::WmOutputs, wm_windows::WmWindows},
+        api::{
+            wm_input::WmInput, wm_layers::WmLayers, wm_outputs::WmOutputs, wm_windows::WmWindows,
+        },
         event_handler::LuaEventHandler,
     },
     lua_typedef,
@@ -36,7 +38,10 @@ impl UserData for Wm {
         impl_lua_event_handler!(methods);
 
         methods.add_method("quit", |_, _this, ()| {
-            GlobalHazel::try_with(|hazel| Ok(hazel.loop_signal.stop()))
+            GlobalHazel::try_with(|hazel| {
+                let _: () = hazel.loop_signal.stop();
+                Ok(())
+            })
         });
     }
 }
@@ -48,7 +53,7 @@ lua_typedef!(Wm => Wm {
     let windows: WmWindows;
     let layers: WmLayers;
     let outputs: WmOutputs;
-	use ready => nil;
-	use tick => nil;
+    use ready => nil;
+    use tick => nil;
     fn quit() -> nil;
 });

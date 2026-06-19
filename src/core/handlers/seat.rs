@@ -1,9 +1,6 @@
 use smithay::{
     delegate_seat,
-    input::{
-        SeatHandler, SeatState,
-        pointer::CursorImageStatus,
-    },
+    input::{SeatHandler, SeatState, pointer::CursorImageStatus},
     reexports::wayland_server::protocol::wl_surface::WlSurface,
 };
 

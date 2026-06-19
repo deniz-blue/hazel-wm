@@ -1,23 +1,18 @@
 use smithay::{
     delegate_layer_shell,
-    desktop::{layer_map_for_output, LayerSurface, PopupKind},
+    desktop::{LayerSurface, PopupKind, layer_map_for_output},
     output::Output,
     reexports::wayland_server::protocol::{wl_output::WlOutput, wl_surface::WlSurface},
     wayland::{
         compositor::with_states,
-        shell::wlr_layer::{
-            Layer, LayerSurfaceData, WlrLayerShellHandler, WlrLayerShellState,
-        },
+        shell::wlr_layer::{Layer, LayerSurfaceData, WlrLayerShellHandler, WlrLayerShellState},
     },
 };
 use tracing::info;
 
 use smithay::reexports::wayland_server::Resource;
 
-use crate::{
-    core::Hazel,
-    lua::api::wm_layers::LayerHandle,
-};
+use crate::{core::Hazel, lua::api::wm_layers::LayerHandle};
 
 impl WlrLayerShellHandler for Hazel {
     fn shell_state(&mut self) -> &mut WlrLayerShellState {
@@ -31,7 +26,6 @@ impl WlrLayerShellHandler for Hazel {
         _layer: Layer,
         namespace: String,
     ) {
-        // Resolve the output: use the specified one, or fall back to the first available.
         let output = wl_output
             .as_ref()
             .and_then(Output::from_resource)
@@ -63,14 +57,11 @@ impl WlrLayerShellHandler for Hazel {
         info!("Layer surface destroyed");
 
         let wl_surface = surface.wl_surface().clone();
-
-        // Find the DesktopLayerSurface before unmapping, so we can emit the event.
         let outputs: Vec<_> = self.compositor.space.outputs().cloned().collect();
         for output in &outputs {
             let layer = {
                 let map = layer_map_for_output(output);
-                map
-                    .layers()
+                map.layers()
                     .find(|l| l.layer_surface().wl_surface() == &wl_surface)
                     .cloned()
             };
@@ -104,14 +95,7 @@ impl WlrLayerShellHandler for Hazel {
 
 delegate_layer_shell!(Hazel);
 
-/// Handle a layer-shell surface commit.
-///
-/// Should be called from `CompositorHandler::commit()` for surfaces that belong
-/// to a layer-shell surface. Returns `true` if the surface was a layer surface.
-pub fn handle_commit(
-    output: &smithay::output::Output,
-    surface: &WlSurface,
-) -> bool {
+pub fn handle_commit(output: &smithay::output::Output, surface: &WlSurface) -> bool {
     let mut map = layer_map_for_output(output);
 
     let Some(layer) = map
@@ -121,10 +105,8 @@ pub fn handle_commit(
         return false;
     };
 
-    // Arrange the layers to compute positions/sizes.
     map.arrange();
 
-    // Send initial configure if not yet sent.
     let initial_configure_sent = with_states(surface, |states| {
         states
             .data_map

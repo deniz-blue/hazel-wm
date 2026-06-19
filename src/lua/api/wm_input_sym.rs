@@ -108,7 +108,7 @@ impl UserData for LuaKeys {
 }
 
 lua_typedef!(Keys => LuaKeys {
-	extern Key;
+    extern Key;
 });
 
 pub struct LuaMouseButtons;
@@ -129,5 +129,5 @@ impl UserData for LuaMouseButtons {
 }
 
 lua_typedef!(MouseButtons => LuaMouseButtons {
-	extern Button;
+    extern Button;
 });

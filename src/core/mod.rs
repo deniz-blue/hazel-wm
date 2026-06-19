@@ -4,8 +4,8 @@ use smithay::reexports::{
     calloop::{EventLoop, Interest, LoopSignal, Mode, PostAction, generic::Generic},
     wayland_server::{Display, DisplayHandle},
 };
-use tracing::error;
 use std::error::Error as StdError;
+use tracing::error;
 
 use crate::{
     backend::Backend,

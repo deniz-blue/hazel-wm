@@ -20,18 +20,16 @@ use smithay::{
             timer::{TimeoutAction, Timer},
         },
         drm::control::crtc,
-        input::Libinput, rustix::fs::OFlags, wayland_server::DisplayHandle,
+        input::Libinput,
+        rustix::fs::OFlags,
+        wayland_server::DisplayHandle,
     },
     utils::DeviceFd,
 };
 use smithay::{
     backend::{
-        allocator::{Fourcc, Format, Modifier},
-        drm::{
-            DrmEvent,
-            compositor::DrmCompositor,
-            exporter::gbm::GbmFramebufferExporter,
-        },
+        allocator::{Format, Fourcc, Modifier},
+        drm::{DrmEvent, compositor::DrmCompositor, exporter::gbm::GbmFramebufferExporter},
     },
     output::{Mode as OutputMode, Output, OutputModeSource, PhysicalProperties},
     reexports::drm::control::{Mode as DrmMode, ModeTypeFlags},
@@ -49,7 +47,7 @@ const SUPPORTED_COLOR_FORMATS: [Fourcc; 4] = [
 ];
 
 use crate::{
-    backend::{tty::output_device::OutputDevice, Backend},
+    backend::{Backend, tty::output_device::OutputDevice},
     core::{GlobalHazel, Hazel, HazelEventLoop},
 };
 
@@ -85,7 +83,7 @@ impl HazelTtyBackend {
             .handle()
             .insert_source(session_notifier, move |event, _, _| match event {
                 session::Event::ActivateSession => {
-                    if let Err(_) = libinput.resume() {
+                    if libinput.resume().is_err() {
                         error!("Failed to resume libinput!");
                     };
 
@@ -136,13 +134,15 @@ impl HazelTtyBackend {
             .map(|(id, path)| (id, path.to_owned()))
             .collect();
 
-        let primary_device = device_list.iter().find(|(device_id, _)| {
-            primary_node
-                .map(|primary_node| *device_id == primary_node.dev_id())
-                .unwrap_or(false)
-                || *device_id == primary_gpu.dev_id()
-        }).map(|(id, path)| (*id, path.as_path()));
-
+        let primary_device = device_list
+            .iter()
+            .find(|(device_id, _)| {
+                primary_node
+                    .map(|primary_node| *device_id == primary_node.dev_id())
+                    .unwrap_or(false)
+                    || *device_id == primary_gpu.dev_id()
+            })
+            .map(|(id, path)| (*id, path.as_path()));
 
         let api = GbmGlesBackend::with_context_priority(ContextPriority::High);
         let gpu_manager = GpuManager::new(api)?;
@@ -175,10 +175,10 @@ impl HazelTtyBackend {
         };
 
         let loop_handle = event_loop.handle();
-        if let Some((device_id, path)) = primary_device {
-            if let Err(e) = this.on_device_added(&loop_handle, device_id, path) {
-                error!("Failed to initialize primary DRM device: {e}");
-            }
+        if let Some((device_id, path)) = primary_device
+            && let Err(e) = this.on_device_added(&loop_handle, device_id, path)
+        {
+            error!("Failed to initialize primary DRM device: {e}");
         }
 
         let primary_device_id = primary_device.map(|(device_id, _)| device_id);
@@ -223,7 +223,7 @@ impl HazelTtyBackend {
         }
 
         let openflags = OFlags::RDWR | OFlags::CLOEXEC | OFlags::NOCTTY | OFlags::NONBLOCK;
-        let fd = self.session.open(&path, openflags)?;
+        let fd = self.session.open(path, openflags)?;
         let device_fd = DrmDeviceFd::new(DeviceFd::from(fd));
 
         let (drm, drm_notifier) = DrmDevice::new(device_fd.clone(), true)?;
@@ -337,7 +337,10 @@ impl HazelTtyBackend {
 
         for event in scan_result {
             match event {
-                DrmScanEvent::Connected { connector, crtc: Some(crtc) } => {
+                DrmScanEvent::Connected {
+                    connector,
+                    crtc: Some(crtc),
+                } => {
                     let connector_name = format_connector_name(&connector);
                     info!("Connector connected: {} (CRTC: {crtc:?})", connector_name);
 
@@ -346,7 +349,12 @@ impl HazelTtyBackend {
                         continue;
                     };
 
-                    info!("Picked mode: {}x{}@{}", drm_mode.size().0, drm_mode.size().1, drm_mode.vrefresh());
+                    info!(
+                        "Picked mode: {}x{}@{}",
+                        drm_mode.size().0,
+                        drm_mode.size().1,
+                        drm_mode.vrefresh()
+                    );
 
                     let (physical_width, physical_height) = connector.size().unwrap_or((0, 0));
                     let output = Output::new(
@@ -363,17 +371,22 @@ impl HazelTtyBackend {
                     output.change_current_state(Some(wl_mode), None, None, None);
                     output.set_preferred(wl_mode);
 
-                    let drm_surface = match device.drm.create_surface(crtc, drm_mode, &[connector.handle()]) {
-                        Ok(s) => s,
-                        Err(e) => {
-                            error!("Failed to create DRM surface: {e}");
-                            continue;
-                        }
-                    };
+                    let drm_surface =
+                        match device
+                            .drm
+                            .create_surface(crtc, drm_mode, &[connector.handle()])
+                        {
+                            Ok(s) => s,
+                            Err(e) => {
+                                error!("Failed to create DRM surface: {e}");
+                                continue;
+                            }
+                        };
 
-                    let render_formats = SUPPORTED_COLOR_FORMATS
-                        .iter()
-                        .map(|&code| Format { code, modifier: Modifier::Invalid });
+                    let render_formats = SUPPORTED_COLOR_FORMATS.iter().map(|&code| Format {
+                        code,
+                        modifier: Modifier::Invalid,
+                    });
 
                     let compositor = match DrmCompositor::new(
                         OutputModeSource::Auto(output.clone()),
@@ -407,14 +420,16 @@ impl HazelTtyBackend {
                 }
                 DrmScanEvent::Disconnected { connector, crtc } => {
                     let connector_name = format_connector_name(&connector);
-                    info!("Connector disconnected: {} (CRTC: {crtc:?})", connector_name);
+                    info!(
+                        "Connector disconnected: {} (CRTC: {crtc:?})",
+                        connector_name
+                    );
 
-                    if let Some(crtc) = crtc {
-                        if let Some(mut surface) = device.surfaces.remove(&crtc) {
-                            if let Err(e) = surface.compositor.clear() {
-                                error!("Error clearing compositor for {connector_name}: {e}");
-                            }
-                        }
+                    if let Some(crtc) = crtc
+                        && let Some(mut surface) = device.surfaces.remove(&crtc)
+                        && let Err(e) = surface.compositor.clear()
+                    {
+                        error!("Error clearing compositor for {connector_name}: {e}");
                     }
                 }
             }
@@ -432,5 +447,9 @@ fn pick_mode(connector: &smithay::reexports::drm::control::connector::Info) -> O
 }
 
 fn format_connector_name(connector: &smithay::reexports::drm::control::connector::Info) -> String {
-    format!("{}-{}", connector.interface().as_str(), connector.interface_id())
+    format!(
+        "{}-{}",
+        connector.interface().as_str(),
+        connector.interface_id()
+    )
 }

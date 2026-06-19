@@ -47,7 +47,9 @@ impl Hazel {
         if device.has_capability(DeviceCapability::Pointer) {
             info!("Adding pointer capability to seat {seat_to_assign}");
             let pointer = seat.add_pointer();
-            self.compositor.pointers.insert(pointer.clone(), PointerState::new());
+            self.compositor
+                .pointers
+                .insert(pointer.clone(), PointerState::new());
             self.wm()
                 .input
                 .events
