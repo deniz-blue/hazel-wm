@@ -16,13 +16,14 @@ use smithay::{
             ImportAll, ImportMem,
         },
     },
-    desktop::space::SurfaceTree,
+    desktop::{layer_map_for_output, space::SurfaceTree},
     input::pointer::CursorImageStatus,
     reexports::{
         calloop::{LoopHandle, timer::{TimeoutAction, Timer}},
         drm::control::crtc::Handle as CrtcHandle,
     },
     utils::{IsAlive, Scale, Size, Transform},
+    wayland::shell::wlr_layer::Layer,
 };
 use tracing::{info, trace};
 
@@ -151,7 +152,55 @@ impl Hazel {
             }
         }
 
-        // ── Space elements (windows + layer surfaces) ──────────────────────
+        // ── Layer surfaces (panels, bars, etc.) ────────────────────────────
+        // Rendered in z-order: Background → Bottom → [windows] → Top → Overlay.
+        // Elements at the front of the vec are drawn last (on top), so:
+        //   cursor > overlay > top > space > bottom > background
+
+        let mut bottom_layer_elements: Vec<HazelElement<_>> = Vec::new();
+        let mut top_layer_elements: Vec<HazelElement<_>> = Vec::new();
+
+        let layer_map = layer_map_for_output(&output);
+        for smithay_layer in &[Layer::Background, Layer::Bottom] {
+            for layer_surface in layer_map.layers_on(*smithay_layer) {
+                if !layer_surface.alive() || !layer_surface.wl_surface().alive() {
+                    continue;
+                }
+                let Some(geo) = layer_map.layer_geometry(layer_surface) else {
+                    continue;
+                };
+                let pos = geo.loc.to_f64().to_physical(scale).to_i32_round();
+                let tree = SurfaceTree::from_surface(layer_surface.wl_surface());
+                let els: Vec<HazelElement<_>> = tree
+                    .render_elements(&mut renderer, pos, scale, 1.0)
+                    .into_iter()
+                    .map(HazelElement::Space)
+                    .collect();
+                bottom_layer_elements.extend(els);
+            }
+        }
+        for smithay_layer in &[Layer::Top, Layer::Overlay] {
+            for layer_surface in layer_map.layers_on(*smithay_layer) {
+                if !layer_surface.alive() || !layer_surface.wl_surface().alive() {
+                    continue;
+                }
+                let Some(geo) = layer_map.layer_geometry(layer_surface) else {
+                    continue;
+                };
+                let pos = geo.loc.to_f64().to_physical(scale).to_i32_round();
+                let tree = SurfaceTree::from_surface(layer_surface.wl_surface());
+                let els: Vec<HazelElement<_>> = tree
+                    .render_elements(&mut renderer, pos, scale, 1.0)
+                    .into_iter()
+                    .map(HazelElement::Space)
+                    .collect();
+                top_layer_elements.extend(els);
+            }
+        }
+        // Drop the LayerMap lock before we use the renderer again.
+        drop(layer_map);
+
+        // ── Space elements (windows) ───────────────────────────────────────
         use smithay::desktop::space::SpaceRenderElements;
         let space_elements: Vec<HazelElement<_>> = self
             .compositor
@@ -168,8 +217,12 @@ impl Hazel {
             })
             .collect();
 
-        // Cursor on top (front), then space elements behind.
+        // Build element slice: cursor (front) > top/overlay > space > bottom/background (back).
+        elements.extend(top_layer_elements);
         elements.extend(space_elements);
+        elements.extend(bottom_layer_elements);
+
+        // Cursor remains first in the vec (front-most).
 
         // ── Render & queue ─────────────────────────────────────────────────
         let clear_color = [0.2, 0.4, 0.8, 1.0];
@@ -185,12 +238,23 @@ impl Hazel {
             _ => false,
         };
 
-        // Frame callbacks
+        // Frame callbacks for windows
         for window in self.compositor.space.elements() {
             window.send_frame(&output, Duration::ZERO, Some(Duration::ZERO), |_, _| {
                 Some(output.clone())
             });
         }
+
+        // Frame callbacks for layer surfaces
+        let layer_map = layer_map_for_output(&output);
+        for layer_surface in layer_map.layers() {
+            if layer_surface.alive() {
+                layer_surface.send_frame(&output, Duration::ZERO, Some(Duration::ZERO), |_, _| {
+                    Some(output.clone())
+                });
+            }
+        }
+        drop(layer_map);
 
         if queued {
             info!("Flip on {} ({} elements)", output.name(), elements.len());

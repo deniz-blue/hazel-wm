@@ -8,6 +8,7 @@ use smithay::{
         },
         winit::{self, WinitEvent},
     },
+    desktop::layer_map_for_output,
     output::{Mode, Output, PhysicalProperties, Subpixel},
     reexports::winit::window::WindowAttributes,
     utils::{Rectangle, Transform},
@@ -66,6 +67,8 @@ impl HazelWinitBackend {
                             None,
                             None,
                         );
+                        // Re-arrange layer surfaces for the new output size.
+                        layer_map_for_output(&cloned_output).arrange();
                     }
                     WinitEvent::Input(event) => {
                         if let Err(e) =

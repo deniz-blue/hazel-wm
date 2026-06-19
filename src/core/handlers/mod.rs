@@ -7,3 +7,4 @@ pub mod selection;
 pub mod shm;
 pub mod xdg_shell;
 pub mod kde;
+pub mod layer_shell;

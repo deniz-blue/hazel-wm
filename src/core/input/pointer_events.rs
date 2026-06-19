@@ -30,9 +30,15 @@ impl Hazel {
         let utime = event.time();
 
         let (seat, pointer) = self.compositor.get_pointer_handle(&device_id).unwrap();
+        let pointer_pos = pointer.current_location();
 
-        if let Some((window, surface, _)) =
-            self.compositor.surface_under(pointer.current_location())
+        // Check layer surfaces first (panels, bars, etc.), then windows.
+        if let Some((surface, _)) = self.compositor.layer_surface_under(pointer_pos) {
+            if let Some(keyboard) = seat.get_keyboard() {
+                keyboard.set_focus(self, Some(surface), serial);
+            }
+        } else if let Some((window, surface, _)) =
+            self.compositor.surface_under(pointer_pos)
         {
             self.compositor.space.raise_element(&window, true);
             if let Some(keyboard) = seat.get_keyboard() {
@@ -91,7 +97,16 @@ impl Hazel {
         let (_, pointer) = self.compositor.get_pointer_handle(&device_id).unwrap();
 
         let new_position = pointer.current_location() + delta;
-        let under = self.compositor.surface_under(new_position);
+        // Check layer surfaces first, then windows.
+        let under = self
+            .compositor
+            .layer_surface_under(new_position)
+            .map(|(surface, point)| (surface, point))
+            .or_else(|| {
+                self.compositor
+                    .surface_under(new_position)
+                    .map(|(_, surface, point)| (surface, point))
+            });
 
         let event = PointerMoveEvent {
             default_prevented: Rc::new(Cell::new(false)),
@@ -112,11 +127,7 @@ impl Hazel {
             .into_box()?;
 
         if !event.default_prevented.get() {
-            pointer.motion(
-                self,
-                under.map(|(_, surface, point)| (surface, point)),
-                &event.motion(),
-            );
+            pointer.motion(self, under, &event.motion());
             pointer.frame(self);
         }
 
@@ -168,7 +179,16 @@ impl Hazel {
         let location = location_output + coordinate_space.loc.to_f64();
         let utime = event.time();
 
-        let under = self.compositor.surface_under(location);
+        // Check layer surfaces first, then windows.
+        let under = self
+            .compositor
+            .layer_surface_under(location)
+            .map(|(surface, point)| (surface, point))
+            .or_else(|| {
+                self.compositor
+                    .surface_under(location)
+                    .map(|(_, surface, point)| (surface, point))
+            });
 
         let delta = location_output - previous_output_position;
 
@@ -197,11 +217,7 @@ impl Hazel {
             .into_box()?;
 
         if !event.default_prevented.get() {
-            pointer_handle.motion(
-                self,
-                under.map(|(_, surface, point)| (surface, point)),
-                &event.motion(),
-            );
+            pointer_handle.motion(self, under, &event.motion());
             pointer_handle.frame(self);
         }
 

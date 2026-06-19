@@ -1,7 +1,7 @@
 use std::{collections::HashMap, ffi::OsString, sync::Arc};
 
 use smithay::{
-    desktop::{PopupManager, Space, Window, WindowSurfaceType},
+    desktop::{layer_map_for_output, PopupManager, Space, Window, WindowSurfaceType},
     input::{Seat, SeatState, keyboard::KeyboardHandle, pointer::PointerHandle},
     reexports::wayland_server::{DisplayHandle, protocol::wl_surface::WlSurface},
     utils::{Logical, Point},
@@ -9,7 +9,11 @@ use smithay::{
         compositor::CompositorState,
         output::OutputManagerState,
         selection::data_device::DataDeviceState,
-        shell::{kde::decoration::KdeDecorationState, xdg::XdgShellState},
+        shell::{
+            kde::decoration::KdeDecorationState,
+            wlr_layer::{Layer, WlrLayerShellState},
+            xdg::XdgShellState,
+        },
         shm::ShmState,
         socket::ListeningSocketSource,
     },
@@ -35,6 +39,7 @@ pub struct HazelCompositor {
 pub struct HazelSmithay {
     pub compositor_state: CompositorState,
     pub xdg_shell_state: XdgShellState,
+    pub layer_shell_state: WlrLayerShellState,
     pub shm_state: ShmState,
     pub output_manager_state: OutputManagerState,
     pub seat_state: SeatState<Hazel>,
@@ -47,6 +52,7 @@ impl HazelCompositor {
     pub fn new(event_loop: &mut HazelEventLoop, dh: &DisplayHandle) -> Self {
         let compositor_state = CompositorState::new::<Hazel>(&dh);
         let xdg_shell_state = XdgShellState::new::<Hazel>(&dh);
+        let layer_shell_state = WlrLayerShellState::new::<Hazel>(&dh);
         let shm_state = ShmState::new::<Hazel>(&dh, vec![]);
         let popups = PopupManager::default();
         let kde_decoration_state = KdeDecorationState::new::<Hazel>(&dh, Mode::Client);
@@ -65,6 +71,7 @@ impl HazelCompositor {
             smithay: HazelSmithay {
                 compositor_state,
                 xdg_shell_state,
+                layer_shell_state,
                 shm_state,
                 output_manager_state,
                 seat_state,
@@ -121,6 +128,39 @@ impl HazelCompositor {
 
     pub fn window_under(&self, pos: Point<f64, Logical>) -> Option<(&Window, Point<i32, Logical>)> {
         self.space.element_under(pos)
+    }
+
+    /// Returns the topmost layer surface and its position under the given point.
+    /// Checks layers in reverse z-order: Overlay → Top → Bottom → Background.
+    /// Translates global coords to each output's local space before checking.
+    pub fn layer_surface_under(
+        &self,
+        pos: Point<f64, Logical>,
+    ) -> Option<(WlSurface, Point<f64, Logical>)> {
+        for output in self.space.outputs() {
+            let geo = self.space.output_geometry(output)?;
+            let local = pos - geo.loc.to_f64();
+            if local.x < 0.0 || local.y < 0.0 || local.x > geo.size.w as f64 || local.y > geo.size.h as f64 {
+                continue;
+            }
+            let map = layer_map_for_output(output);
+            for layer in &[Layer::Overlay, Layer::Top, Layer::Bottom, Layer::Background] {
+                if let Some(layer_surface) = map.layer_under(*layer, local) {
+                    let layer_geo = map
+                        .layer_geometry(layer_surface)
+                        .unwrap_or_default();
+                    let surface = layer_surface.wl_surface().clone();
+                    if let Some((s, p)) = layer_surface
+                        .surface_under(local - layer_geo.loc.to_f64(), WindowSurfaceType::ALL)
+                    {
+                        return Some((s, (p + layer_geo.loc + geo.loc).to_f64()));
+                    }
+                    // Return the layer surface's own WlSurface in global coords.
+                    return Some((surface, pos));
+                }
+            }
+        }
+        None
     }
 
     pub fn surface_under(

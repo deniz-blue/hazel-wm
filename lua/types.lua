@@ -250,6 +250,19 @@ function WmOutput:size() end
 local WmWindows = {}
 
 --- @class WmWindows
+--- @return number
+function WmWindows:count() end
+
+--- @class WmWindows
+--- @param index number
+--- @return Window
+function WmWindows:get(index) end
+
+--- @class WmWindows
+--- @return Array<Window>
+function WmWindows:all() end
+
+--- @class WmWindows
 --- @param point Point
 --- @return Window
 function WmWindows:under(point) end
@@ -278,6 +291,51 @@ function Window:size() end
 --- @param size Size
 --- @return nil
 function Window:set_size(size) end
+
+--- @class Window
+--- @return string
+function Window:title() end
+
+--- @class Window
+--- @return string
+function Window:app_id() end
+
+--- @class Window
+--- @return nil
+function Window:close() end
+
+--- @class Window
+--- @param active boolean
+--- @return nil
+function Window:set_activated(active) end
+
+--- @class Window
+--- @return WindowStates
+function Window:states() end
+
+--- @class Window
+--- @param name string
+--- @param enabled boolean
+--- @return nil
+function Window:set_state(name, enabled) end
+
+--- @class WindowStates
+local WindowStates = {}
+
+--- @class WindowStates
+--- @param name string
+--- @return boolean
+function WindowStates:has(name) end
+
+--- @class WindowStates
+--- @return Array<string>
+function WindowStates:list() end
+
+--- @class WindowStates
+--- @param name string
+--- @param enabled boolean
+--- @return nil
+function WindowStates:set(name, enabled) end
 
 ---@param command string
 function spawn(command) end
