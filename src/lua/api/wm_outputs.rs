@@ -31,6 +31,18 @@ impl UserData for WmOutputs {
             GlobalHazel::try_with(|hazel| Ok(hazel.compositor.space.outputs().count()))
         });
 
+        methods.add_method("under", |_, _, point: LuaPoint<f64, _>| {
+            GlobalHazel::try_with(|hazel| {
+                let outputs: Vec<_> = hazel
+                    .compositor
+                    .space
+                    .output_under(point.0)
+                    .map(|o| WmOutputHandle(o.downgrade()))
+                    .collect();
+                Ok(outputs)
+            })
+        });
+
         methods.add_method("name", |_, _, name: String| {
             GlobalHazel::try_with(|hazel| {
                 let output = hazel
@@ -41,6 +53,26 @@ impl UserData for WmOutputs {
                     .map(|output| WmOutputHandle(output.downgrade()));
 
                 Ok(output)
+            })
+        });
+
+        methods.add_method("get", |_, _, index: usize| {
+            GlobalHazel::try_with(|hazel| {
+                let idx = index.checked_sub(1);
+                Ok(idx.and_then(|i| {
+                    hazel.compositor.space.outputs().nth(i).map(|o| WmOutputHandle(o.downgrade()))
+                }))
+            })
+        });
+
+        methods.add_method("all", |_, _, _: ()| {
+            GlobalHazel::try_with(|hazel| {
+                Ok(hazel
+                    .compositor
+                    .space
+                    .outputs()
+                    .map(|o| WmOutputHandle(o.downgrade()))
+                    .collect::<Vec<_>>())
             })
         });
 
@@ -79,7 +111,10 @@ impl UserData for WmOutputs {
 
 lua_typedef!(WmOutputs => WmOutputs {
     fn count() -> number;
+    fn get(index: number) -> WmOutput;
+    fn all() -> Array<WmOutput>;
     fn name(name: string) -> WmOutput;
+    fn under(point: Point) -> Array<WmOutput>;
 });
 
 pub struct WmOutputHandle(WeakOutput);

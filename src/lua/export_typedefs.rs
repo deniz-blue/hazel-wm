@@ -10,6 +10,8 @@ use crate::lua::{
 pub fn dump_typedefs() {
     println!("---@meta");
     println!();
+    println!("-- GENERATED FILE, DO NOT EDIT MANUALLY");
+    println!();
     println!("---@alias Array<T> T[]");
     println!("---@alias Option<T> T?");
     println!();

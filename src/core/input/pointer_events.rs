@@ -1,3 +1,5 @@
+use std::{cell::Cell, error::Error as StdError, rc::Rc};
+
 use smithay::{
     backend::input::{
         AbsolutePositionEvent, Axis, AxisRelativeDirection, ButtonState, Device, Event,
@@ -7,7 +9,6 @@ use smithay::{
     input::pointer::AxisFrame,
     utils::SERIAL_COUNTER,
 };
-use std::error::Error as StdError;
 
 use crate::{
     core::{Hazel, input::pointer::{PointerAbsoluteMapping, PointerState}},
@@ -60,18 +61,20 @@ impl Hazel {
             serial,
             utime,
             pointer: pointer.clone(),
-            default_prevented: Default::default(),
+            default_prevented: Rc::new(Cell::new(false)),
         };
 
-        pointer.button(self, &event.button_event());
-
-        pointer.frame(self);
-
+        // Lua first — prevent_default can skip the actual pointer op
         self.wm()
             .input
             .events
-            .emit(PointerButtonEvent::name(), event)
+            .emit(PointerButtonEvent::name(), event.clone())
             .into_box()?;
+
+        if !event.default_prevented.get() {
+            pointer.button(self, &event.button_event());
+            pointer.frame(self);
+        }
 
         Ok(())
     }
@@ -91,7 +94,7 @@ impl Hazel {
         let under = self.compositor.surface_under(new_position);
 
         let event = PointerMoveEvent {
-            default_prevented: Default::default(),
+            default_prevented: Rc::new(Cell::new(false)),
             pointer: pointer.clone(),
             serial: SERIAL_COUNTER.next_serial(),
             utime,
@@ -101,19 +104,21 @@ impl Hazel {
             position: new_position,
         };
 
-        pointer.motion(
-            self,
-            under.map(|(_, surface, point)| (surface, point)),
-            &event.motion(),
-        );
-
-        pointer.frame(self);
-
+        // Lua first — prevent_default can skip the actual pointer op
         self.wm()
             .input
             .events
-            .emit(PointerMoveEvent::name(), event)
+            .emit(PointerMoveEvent::name(), event.clone())
             .into_box()?;
+
+        if !event.default_prevented.get() {
+            pointer.motion(
+                self,
+                under.map(|(_, surface, point)| (surface, point)),
+                &event.motion(),
+            );
+            pointer.frame(self);
+        }
 
         Ok(())
     }
@@ -174,7 +179,7 @@ impl Hazel {
             .absolute_previous = location_output;
 
         let event = PointerMoveEvent {
-            default_prevented: Default::default(),
+            default_prevented: Rc::new(Cell::new(false)),
             pointer: pointer_handle.clone(),
             delta,
             delta_unaccel: delta,
@@ -184,19 +189,21 @@ impl Hazel {
             utime,
         };
 
-        pointer_handle.motion(
-            self,
-            under.map(|(_, surface, point)| (surface, point)),
-            &event.motion(),
-        );
-
-        pointer_handle.frame(self);
-
+        // Lua first — prevent_default can skip the actual pointer op
         self.wm()
             .input
             .events
             .emit(PointerMoveEvent::name(), event.clone())
             .into_box()?;
+
+        if !event.default_prevented.get() {
+            pointer_handle.motion(
+                self,
+                under.map(|(_, surface, point)| (surface, point)),
+                &event.motion(),
+            );
+            pointer_handle.frame(self);
+        }
 
         Ok(())
     }

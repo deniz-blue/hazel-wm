@@ -1,5 +1,7 @@
 ---@meta
 
+-- GENERATED FILE, DO NOT EDIT MANUALLY
+
 ---@alias Array<T> T[]
 ---@alias Option<T> T?
 
@@ -12,15 +14,9 @@ Button = {}
 --- @class Point
 --- @field x number
 --- @field y number
---- @param new Point
---- @return Point
-function Point(new) end
-
---- @class Point
---- @param x number
---- @param y number
---- @return Point
-function Point(x, y) end
+--- @overload fun(new: Point): Point
+--- @overload fun(x: number, y: number): Point
+local Point = {}
 
 --- @class Point
 --- @param other Point
@@ -40,6 +36,7 @@ local Size = {}
 local Wm = {}
 
 wm = Wm
+--- @class Wm
 --- @return nil
 function Wm:quit() end
 
@@ -78,9 +75,11 @@ function WmInput:on(event, callback) end
 --- @class WmSeats
 local WmSeats = {}
 
+--- @class WmSeats
 --- @return integer
 function WmSeats:count() end
 
+--- @class WmSeats
 --- @param name string
 --- @return Option<Seat>
 function WmSeats:get(name) end
@@ -88,35 +87,57 @@ function WmSeats:get(name) end
 --- @class WmOutputs
 local WmOutputs = {}
 
+--- @class WmOutputs
 --- @return number
 function WmOutputs:count() end
 
+--- @class WmOutputs
+--- @param index number
+--- @return WmOutput
+function WmOutputs:get(index) end
+
+--- @class WmOutputs
+--- @return Array<WmOutput>
+function WmOutputs:all() end
+
+--- @class WmOutputs
 --- @param name string
 --- @return WmOutput
 function WmOutputs:name(name) end
+
+--- @class WmOutputs
+--- @param point Point
+--- @return Array<WmOutput>
+function WmOutputs:under(point) end
 
 --- @class Seat
 --- @field name string
 local Seat = {}
 
+--- @class Seat
 --- @return Option<Pointer>
 function Seat:pointer() end
 
+--- @class Seat
 --- @return Option<Keyboard>
 function Seat:keyboard() end
 
 --- @class Pointer
 local Pointer = {}
 
+--- @class Pointer
 --- @return Seat
 function Pointer:seat() end
 
+--- @class Pointer
 --- @return Point
 function Pointer:position() end
 
+--- @class Pointer
 --- @return table<MouseButton>
 function Pointer:buttons() end
 
+--- @class Pointer
 --- @return Option<Window>
 function Pointer:window_under() end
 
@@ -133,6 +154,7 @@ Button = MouseButtons
 --- @field pointer Pointer
 local PointerButtonEvent = {}
 
+--- @class PointerButtonEvent
 --- @return nil
 function PointerButtonEvent:prevent_default() end
 
@@ -144,6 +166,7 @@ function PointerButtonEvent:prevent_default() end
 --- @field pointer Pointer
 local PointerMoveEvent = {}
 
+--- @class PointerMoveEvent
 --- @return nil
 function PointerMoveEvent:prevent_default() end
 
@@ -157,12 +180,15 @@ Key = Keys
 --- @class Keyboard
 local Keyboard = {}
 
+--- @class Keyboard
 --- @return Seat
 function Keyboard:seat() end
 
+--- @class Keyboard
 --- @return string
 function Keyboard:get_layout() end
 
+--- @class Keyboard
 --- @param keymap string
 --- @return boolean
 function Keyboard:set_layout(keymap) end
@@ -178,6 +204,7 @@ function Keyboard:set_layout(keymap) end
 --- @field modifiers Modifiers
 local KeyEvent = {}
 
+--- @class KeyEvent
 --- @return nil
 function KeyEvent:prevent_default() end
 
@@ -202,21 +229,30 @@ local OutputMode = {}
 --- @field properties table
 local WmOutput = {}
 
+--- @class WmOutput
 --- @return OutputMode
 function WmOutput:mode() end
 
+--- @class WmOutput
 --- @return Point
 function WmOutput:position() end
 
+--- @class WmOutput
 --- @param point Point
 --- @return nil
 function WmOutput:set_position(point) end
 
+--- @class WmOutput
 --- @return Size
 function WmOutput:size() end
 
 --- @class WmWindows
 local WmWindows = {}
+
+--- @class WmWindows
+--- @param point Point
+--- @return Window
+function WmWindows:under(point) end
 
 --- @param event "new_window"
 --- @param callback fun(e: Window)
@@ -225,16 +261,20 @@ function WmWindows:on(event, callback) end
 --- @class Window
 local Window = {}
 
+--- @class Window
 --- @return Point
 function Window:position() end
 
+--- @class Window
 --- @param position Point
 --- @return nil
 function Window:set_position(position) end
 
+--- @class Window
 --- @return Size
 function Window:size() end
 
+--- @class Window
 --- @param size Size
 --- @return nil
 function Window:set_size(size) end

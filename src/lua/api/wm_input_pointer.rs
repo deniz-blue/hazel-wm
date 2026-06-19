@@ -1,4 +1,4 @@
-use std::cell::RefCell;
+use std::{cell::Cell, rc::Rc};
 
 use mlua::UserData;
 use smithay::{
@@ -66,13 +66,14 @@ lua_typedef!(Pointer => WmInputPointer {
     fn window_under() -> Option<Window>;
 });
 
+#[derive(Clone)]
 pub struct PointerButtonEvent {
     pub serial: Serial,
     pub utime: u64,
     pub button: u32,
     pub state: ButtonState,
     pub pointer: PointerHandle<Hazel>,
-    pub default_prevented: RefCell<bool>,
+    pub default_prevented: Rc<Cell<bool>>,
 }
 
 impl PointerButtonEvent {
@@ -101,7 +102,7 @@ impl UserData for PointerButtonEvent {
 
     fn add_methods<M: mlua::prelude::LuaUserDataMethods<Self>>(methods: &mut M) {
         methods.add_method("prevent_default", |_, this, _: ()| {
-            this.default_prevented.replace(true);
+            this.default_prevented.set(true);
             Ok(())
         });
     }
@@ -122,7 +123,7 @@ pub struct PointerMoveEvent {
     pub output_position: Option<Point<f64, Logical>>,
     pub pointer: PointerHandle<Hazel>,
     pub utime: u64,
-    pub default_prevented: RefCell<bool>,
+    pub default_prevented: Rc<Cell<bool>>,
     pub serial: Serial,
 }
 
@@ -167,7 +168,7 @@ impl UserData for PointerMoveEvent {
 
     fn add_methods<M: mlua::prelude::LuaUserDataMethods<Self>>(methods: &mut M) {
         methods.add_method("prevent_default", |_, this, _: ()| {
-            this.default_prevented.replace(true);
+            this.default_prevented.set(true);
             Ok(())
         });
     }

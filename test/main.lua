@@ -43,7 +43,7 @@ wm.input:on("key", function(e)
 	if e.modifiers.alt and delta then
 		e:prevent_default()
 		print("Moving output")
-		local output = wm.outputs:name("winit")
+		local output = wm.outputs:get(1)
 		if not output then
 			print("Output not found")
 			return
@@ -57,8 +57,6 @@ wm.input:on("key", function(e)
 	end
 end)
 
-local output_velocity = { x = 0, y = 0 }
-
 wm.input:on("pointer_move", function(e)
 	if e.pointer:buttons() then
 		if e.pointer:buttons()[1] then
@@ -70,25 +68,17 @@ wm.input:on("pointer_move", function(e)
 					y = pos.y + e.delta.y
 				})
 			else
-				output_velocity.x = output_velocity.x + e.delta.x
-				output_velocity.y = output_velocity.y + e.delta.y
+				local output = wm.outputs:get(1)
+				if output then
+					e:prevent_default()
+					local pos = output:position()
+					output:set_position({
+						x = pos.x - e.delta.x,
+						y = pos.y - e.delta.y
+					})
+				end
 			end
 		end
-	end
-end)
-
-wm:on("tick", function()
-	if output_velocity.x ~= 0 or output_velocity.y ~= 0 then
-		local output = wm.outputs:name("winit")
-		if output then
-			local pos = output:position()
-			output:set_position({
-				x = pos.x - output_velocity.x,
-				y = pos.y - output_velocity.y
-			})
-		end
-		output_velocity.x = output_velocity.x * 0.9
-		output_velocity.y = output_velocity.y * 0.9
 	end
 end)
 

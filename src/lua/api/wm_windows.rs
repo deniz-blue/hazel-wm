@@ -20,11 +20,23 @@ impl_lua_event_source!(WmWindows);
 impl UserData for WmWindows {
     fn add_methods<M: mlua::prelude::LuaUserDataMethods<Self>>(methods: &mut M) {
         impl_lua_event_handler!(methods);
+
+        methods.add_method("under", |_, _, point: LuaPoint<f64, _>| {
+            with_hazel!(hazel => {
+                let window = hazel
+                    .compositor
+                    .space
+                    .element_under(point.0)
+                    .map(|(w, _loc)| WmWindow(w.clone()));
+                Ok(window)
+            })
+        });
     }
 }
 
 lua_typedef!(WmWindows => WmWindows {
     use new_window => Window;
+    fn under(point: Point) -> Window;
 });
 
 pub struct WmWindow(pub Window);
