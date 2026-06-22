@@ -8,6 +8,7 @@ end)
 wm:on("ready", function()
 	print("WM is ready!")
 	spawn("alacritty")
+	spawn("dms run")
 end)
 
 wm.input:on("key", function(e)
@@ -24,6 +25,10 @@ wm.input:on("key", function(e)
 	if e.modifiers.alt and e.key == Key.R then
 		wm.outputs:name("winit"):set_position({ x = 0, y = 0 })
 		e:prevent_default()
+	end
+
+	if e.modifiers.alt and e.modifiers.shift and e.key == Key.Q then
+		wm:quit()
 	end
 
 	local deltamap = {
@@ -62,6 +67,7 @@ wm.input:on("pointer_move", function(e)
 		if e.pointer:buttons()[1] then
 			local window = e.pointer:window_under()
 			if window then
+				e:prevent_default()
 				local pos = window:position()
 				window:set_position({
 					x = pos.x + e.delta.x,
@@ -80,6 +86,8 @@ wm.input:on("pointer_move", function(e)
 			end
 		end
 	end
+
+	return
 
 	-- constrain pointer to the total bounding box of all outputs
 	local bounds

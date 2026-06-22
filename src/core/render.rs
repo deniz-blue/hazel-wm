@@ -5,7 +5,7 @@ use smithay::{
         allocator::Fourcc,
         drm::{DrmNode, compositor::FrameFlags},
         renderer::{
-            ImportAll, ImportMem,
+            ImportAll, ImportMem, RendererSuper,
             element::{
                 AsRenderElements, Kind,
                 memory::{MemoryBuffer, MemoryRenderBuffer, MemoryRenderBufferRenderElement},
@@ -25,11 +25,12 @@ use smithay::{
     utils::{IsAlive, Scale, Size, Transform},
     wayland::shell::wlr_layer::Layer,
 };
-use tracing::{info, trace};
+use tracing::info;
 
-use crate::{backend::Backend, core::Hazel};
-
-// Element type
+use crate::{
+    backend::Backend,
+    core::{Hazel, compositor::HazelCompositor},
+};
 
 smithay::backend::renderer::element::render_elements! {
     pub HazelElement<R> where R: ImportAll + ImportMem;
@@ -49,7 +50,159 @@ fn cursor_render_buffer() -> &'static MemoryRenderBuffer {
     })
 }
 
-// Render entry point
+impl HazelCompositor {
+    pub fn cursor_elements<R>(
+        &self,
+        renderer: &mut R,
+        output: &smithay::output::Output,
+    ) -> Vec<HazelElement<R>>
+    where
+        R: ImportAll + ImportMem,
+        <R as RendererSuper>::TextureId: Send + Clone + 'static,
+    {
+        let cursor_buf = cursor_render_buffer();
+        let mut elements = Vec::new();
+
+        let output_geometry = match self.space.output_geometry(output) {
+            Some(g) => g,
+            None => return elements,
+        };
+
+        let output_scale = Scale::from(output.current_scale().fractional_scale());
+
+        for seat in self.seats.values() {
+            let Some(pointer) = seat.get_pointer() else {
+                continue;
+            };
+            let Some(state) = self.pointers.get(&pointer) else {
+                continue;
+            };
+
+            let cursor_global = pointer.current_location();
+            if !output_geometry.to_f64().contains(cursor_global) {
+                continue;
+            }
+
+            let cursor_phys = (cursor_global - output_geometry.loc.to_f64())
+                .to_physical(output_scale)
+                .to_i32_round();
+
+            match &state.cursor_status {
+                CursorImageStatus::Surface(surf) if surf.alive() => {
+                    let hotspot = smithay::wayland::compositor::with_states(surf, |states| {
+                        states
+                            .data_map
+                            .get::<smithay::input::pointer::CursorImageSurfaceData>()
+                            .map(|d| d.lock().unwrap().hotspot)
+                    })
+                    .unwrap_or_default();
+
+                    let pos =
+                        cursor_phys - hotspot.to_f64().to_physical(output_scale).to_i32_round();
+                    elements.extend(
+                        SurfaceTree::from_surface(surf).render_elements::<HazelElement<_>>(
+                            renderer,
+                            pos,
+                            output_scale,
+                            1.0,
+                        ),
+                    );
+                }
+                _ => {
+                    let hotspot = CURSOR_SIZE / 2;
+                    let pos = (
+                        (cursor_phys.x - hotspot) as f64,
+                        (cursor_phys.y - hotspot) as f64,
+                    );
+                    if let Ok(el) = MemoryRenderBufferRenderElement::from_buffer(
+                        renderer,
+                        pos,
+                        cursor_buf,
+                        None,
+                        None,
+                        Some(Size::from((CURSOR_SIZE, CURSOR_SIZE))),
+                        Kind::Cursor,
+                    ) {
+                        elements.push(HazelElement::Memory(el));
+                    }
+                }
+            }
+        }
+
+        elements
+    }
+
+    pub fn layer_elements<R>(
+        &self,
+        renderer: &mut R,
+        output: &smithay::output::Output,
+        layer: Layer,
+    ) -> Vec<HazelElement<R>>
+    where
+        R: ImportAll + ImportMem,
+        <R as RendererSuper>::TextureId: Clone + 'static,
+    {
+        let mut elements = Vec::new();
+
+        let output_scale = Scale::from(output.current_scale().fractional_scale());
+
+        let layer_map = layer_map_for_output(output);
+        for surface in layer_map.layers_on(layer) {
+            if !surface.alive() || !surface.wl_surface().alive() {
+                continue;
+            }
+            let Some(geo) = layer_map.layer_geometry(surface) else {
+                continue;
+            };
+            let pos = geo.loc.to_f64().to_physical(output_scale).to_i32_round();
+            elements.extend(surface.render_elements::<HazelElement<_>>(
+                renderer,
+                pos,
+                output_scale,
+                1.0,
+            ));
+        }
+
+        elements
+    }
+
+    pub fn window_elements<R>(
+        &self,
+        renderer: &mut R,
+        output: &smithay::output::Output,
+    ) -> Vec<HazelElement<R>>
+    where
+        R: ImportAll + ImportMem,
+        <R as RendererSuper>::TextureId: Clone + 'static,
+    {
+        let output_geometry = match self.space.output_geometry(output) {
+            Some(g) => g,
+            None => return Vec::new(),
+        };
+
+        let output_scale = Scale::from(output.current_scale().fractional_scale());
+
+        let mut elements = Vec::new();
+
+        for window in self.space.elements() {
+            let Some(window_geo) = self.space.element_geometry(window) else {
+                continue;
+            };
+            let pos = (window_geo.loc - output_geometry.loc)
+                .to_f64()
+                .to_physical(output_scale)
+                .to_i32_round();
+            elements.extend(window.render_elements::<HazelElement<_>>(
+                renderer,
+                pos,
+                output_scale,
+                1.0,
+            ));
+        }
+
+        elements
+    }
+}
 
 impl Hazel {
     pub fn render_tty_output(
@@ -71,150 +224,37 @@ impl Hazel {
         };
 
         let output = surface.output.clone();
-        let output_geometry = match self.compositor.space.output_geometry(&output) {
-            Some(g) => g,
-            None => return,
-        };
 
         let render_node = device.render_node.unwrap_or(tty.primary_gpu);
         let Ok(mut renderer) = tty.gpu_manager.single_renderer(&render_node) else {
             return;
         };
 
-        let scale = Scale::from(output.current_scale().fractional_scale());
-
-        // Cursor
-        // render_output() reverses the element slice and draws back-to-front,
-        // so front-most elements must come FIRST.
-        let cursor_buf = cursor_render_buffer();
-
         let mut elements: Vec<HazelElement<_>> = Vec::new();
 
-        for seat in self.compositor.seats.values() {
-            let Some(pointer) = seat.get_pointer() else {
-                continue;
-            };
-            let Some(state) = self.compositor.pointers.get(&pointer) else {
-                continue;
-            };
+        elements.extend(self.compositor.cursor_elements(&mut renderer, &output));
 
-            let cursor_global = pointer.current_location();
-            if !output_geometry.to_f64().contains(cursor_global) {
-                continue;
-            }
+        elements.extend(
+            self.compositor
+                .layer_elements(&mut renderer, &output, Layer::Overlay),
+        );
 
-            let cursor_phys = (cursor_global - output_geometry.loc.to_f64())
-                .to_physical(scale)
-                .to_i32_round();
+        elements.extend(
+            self.compositor
+                .layer_elements(&mut renderer, &output, Layer::Top),
+        );
 
-            match &state.cursor_status {
-                CursorImageStatus::Surface(surf) if surf.alive() => {
-                    // Offset by the cursor hotspot so the pointer tip
-                    // matches where the user clicked.
-                    let hotspot = smithay::wayland::compositor::with_states(surf, |states| {
-                        states
-                            .data_map
-                            .get::<smithay::input::pointer::CursorImageSurfaceData>()
-                            .map(|d| d.lock().unwrap().hotspot)
-                    })
-                    .unwrap_or_default();
+        elements.extend(self.compositor.window_elements(&mut renderer, &output));
 
-                    let pos = cursor_phys - hotspot.to_f64().to_physical(scale).to_i32_round();
-                    let tree = SurfaceTree::from_surface(surf);
-                    let els: Vec<HazelElement<_>> = tree
-                        .render_elements(&mut renderer, pos, scale, 1.0)
-                        .into_iter()
-                        .map(HazelElement::Space)
-                        .collect();
-                    elements.extend(els);
-                    trace!("cursor: surface");
-                }
-                _ => {
-                    trace!("cursor: fallback");
-                    let hotspot = CURSOR_SIZE / 2;
-                    let pos = (
-                        (cursor_phys.x - hotspot) as f64,
-                        (cursor_phys.y - hotspot) as f64,
-                    );
-                    let el = MemoryRenderBufferRenderElement::from_buffer(
-                        &mut renderer,
-                        pos,
-                        cursor_buf,
-                        None,
-                        None,
-                        Some(Size::from((CURSOR_SIZE, CURSOR_SIZE))),
-                        Kind::Cursor,
-                    );
-                    if let Ok(el) = el {
-                        elements.push(HazelElement::Memory(el));
-                    }
-                }
-            }
-        }
+        elements.extend(
+            self.compositor
+                .layer_elements(&mut renderer, &output, Layer::Bottom),
+        );
 
-        let mut bottom_layer_elements: Vec<HazelElement<_>> = Vec::new();
-        let mut top_layer_elements: Vec<HazelElement<_>> = Vec::new();
-
-        let layer_map = layer_map_for_output(&output);
-        for smithay_layer in &[Layer::Background, Layer::Bottom] {
-            for layer_surface in layer_map.layers_on(*smithay_layer) {
-                if !layer_surface.alive() || !layer_surface.wl_surface().alive() {
-                    continue;
-                }
-                let Some(geo) = layer_map.layer_geometry(layer_surface) else {
-                    continue;
-                };
-                let pos = geo.loc.to_f64().to_physical(scale).to_i32_round();
-                let tree = SurfaceTree::from_surface(layer_surface.wl_surface());
-                let els: Vec<HazelElement<_>> = tree
-                    .render_elements(&mut renderer, pos, scale, 1.0)
-                    .into_iter()
-                    .map(HazelElement::Space)
-                    .collect();
-                bottom_layer_elements.extend(els);
-            }
-        }
-        for smithay_layer in &[Layer::Top, Layer::Overlay] {
-            for layer_surface in layer_map.layers_on(*smithay_layer) {
-                if !layer_surface.alive() || !layer_surface.wl_surface().alive() {
-                    continue;
-                }
-                let Some(geo) = layer_map.layer_geometry(layer_surface) else {
-                    continue;
-                };
-                let pos = geo.loc.to_f64().to_physical(scale).to_i32_round();
-                let tree = SurfaceTree::from_surface(layer_surface.wl_surface());
-                let els: Vec<HazelElement<_>> = tree
-                    .render_elements(&mut renderer, pos, scale, 1.0)
-                    .into_iter()
-                    .map(HazelElement::Space)
-                    .collect();
-                top_layer_elements.extend(els);
-            }
-        }
-        drop(layer_map);
-
-        use smithay::desktop::space::SpaceRenderElements;
-        let space_elements: Vec<HazelElement<_>> = self
-            .compositor
-            .space
-            .render_elements_for_output(&mut renderer, &output, 1.0)
-            .unwrap_or_default()
-            .into_iter()
-            .flat_map(|se| match se {
-                SpaceRenderElements::Surface(el) => vec![HazelElement::Space(el)],
-                SpaceRenderElements::Element(w) => {
-                    vec![HazelElement::from(w)]
-                }
-                _ => vec![],
-            })
-            .collect();
-
-        elements.extend(top_layer_elements);
-        elements.extend(space_elements);
-        elements.extend(bottom_layer_elements);
-
-        // Cursor remains first in the vec (front-most).
+        elements.extend(
+            self.compositor
+                .layer_elements(&mut renderer, &output, Layer::Background),
+        );
 
         let clear_color = [0.2, 0.4, 0.8, 1.0];
         let queued = match surface.compositor.render_frame::<_, _>(
@@ -248,7 +288,6 @@ impl Hazel {
             return;
         }
 
-        // Nothing changed — retry after one refresh interval.
         if let Some(refresh) = output.current_mode().map(|m| m.refresh) {
             let interval = Duration::from_micros(1_000_000 / refresh as u64);
             let timer = Timer::from_duration(interval);
