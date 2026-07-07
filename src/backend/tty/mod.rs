@@ -54,6 +54,7 @@ use crate::{
 pub mod drm_handlers;
 pub mod output_device;
 
+#[derive(Debug)]
 pub struct HazelTtyBackend {
     pub session: LibSeatSession,
     pub gpu_manager: GpuManager<GbmGlesBackend<GlesRenderer, DrmDeviceFd>>,

@@ -7,13 +7,10 @@ use smithay::{
 };
 
 use crate::{
-    core::GlobalHazel,
-    impl_lua_event_handler, impl_lua_event_source,
-    lua::{
+    core::GlobalHazel, impl_lua_event_handler, impl_lua_event_source, lua::{
         api::utils::{LuaPoint, LuaSize},
         event_handler::LuaEventHandler,
-    },
-    lua_typedef,
+    }, lua_eq, lua_fromlua_userdataonly, lua_typedef
 };
 
 #[derive(Default)]
@@ -122,7 +119,8 @@ lua_typedef!(WmOutputs => WmOutputs {
     fn under(point: Point) -> Array<WmOutput>;
 });
 
-pub struct WmOutputHandle(WeakOutput);
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct WmOutputHandle(pub WeakOutput);
 
 impl WmOutputHandle {
     pub fn new(output: &smithay::output::Output) -> Self {
@@ -158,6 +156,8 @@ impl WmOutputHandle {
         }
     }
 }
+
+lua_fromlua_userdataonly!(WmOutputHandle);
 
 impl UserData for WmOutputHandle {
     fn add_fields<F: mlua::prelude::LuaUserDataFields<Self>>(fields: &mut F) {
@@ -195,6 +195,8 @@ impl UserData for WmOutputHandle {
         methods.add_method("size", |_, this, _: ()| {
             Ok(this.current_mode().map(|mode| LuaSize(mode.0.size)))
         });
+
+		lua_eq!(methods);
     }
 }
 

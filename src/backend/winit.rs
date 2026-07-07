@@ -18,6 +18,7 @@ use tracing::{error, info};
 
 use crate::core::{GlobalHazel, HazelEventLoop};
 
+#[derive(Debug)]
 pub struct HazelWinitBackend {
     pub output: Output,
 }

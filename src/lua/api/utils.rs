@@ -26,8 +26,13 @@ impl<N: Display, Kind> Display for LuaSize<N, Kind> {
     }
 }
 
-impl<N: FromLua + Coordinate, Kind> FromLua for LuaSize<N, Kind> {
+impl<N: FromLua + Coordinate + 'static, Kind: 'static> FromLua for LuaSize<N, Kind> {
     fn from_lua(value: mlua::Value, _: &mlua::Lua) -> mlua::Result<Self> {
+        if let mlua::Value::UserData(ud) = &value {
+            if let Ok(size) = ud.borrow::<LuaSize<N, Kind>>() {
+                return Ok(LuaSize(size.0));
+            }
+        }
         let mlua::Value::Table(table) = value else {
             return Err(mlua::Error::FromLuaConversionError {
                 from: value.type_name(),
@@ -60,6 +65,15 @@ impl LuaPoint<f64, Logical> {
             match (first, second) {
                 (Some(mlua::Value::Number(x)), Some(mlua::Value::Number(y))) => {
                     Ok(LuaPoint(Point::new(x, y)))
+                }
+                (Some(mlua::Value::Integer(x)), Some(mlua::Value::Integer(y))) => {
+                    Ok(LuaPoint(Point::new(x as f64, y as f64)))
+                }
+                (Some(mlua::Value::Number(x)), Some(mlua::Value::Integer(y))) => {
+                    Ok(LuaPoint(Point::new(x, y as f64)))
+                }
+                (Some(mlua::Value::Integer(x)), Some(mlua::Value::Number(y))) => {
+                    Ok(LuaPoint(Point::new(x as f64, y)))
                 }
                 (value, _) => Self::from_lua(value.unwrap_or(mlua::Nil), lua),
             }
@@ -105,8 +119,13 @@ impl<N: Display, Kind> Display for LuaPoint<N, Kind> {
     }
 }
 
-impl<N: FromLua + Coordinate, Kind> FromLua for LuaPoint<N, Kind> {
+impl<N: FromLua + Coordinate + 'static, Kind: 'static> FromLua for LuaPoint<N, Kind> {
     fn from_lua(value: mlua::Value, _: &mlua::Lua) -> mlua::Result<Self> {
+        if let mlua::Value::UserData(ud) = &value {
+            if let Ok(point) = ud.borrow::<LuaPoint<N, Kind>>() {
+                return Ok(LuaPoint(point.0));
+            }
+        }
         let mlua::Value::Table(table) = value else {
             return Err(mlua::Error::FromLuaConversionError {
                 from: value.type_name(),
@@ -193,6 +212,11 @@ impl LuaRect {
 
 impl FromLua for LuaRect {
     fn from_lua(value: mlua::Value, _: &mlua::Lua) -> mlua::Result<Self> {
+        if let mlua::Value::UserData(ud) = &value {
+            if let Ok(rect) = ud.borrow::<LuaRect>() {
+                return Ok(LuaRect(rect.0));
+            }
+        }
         let mlua::Value::Table(table) = value else {
             return Err(mlua::Error::FromLuaConversionError {
                 from: value.type_name(),

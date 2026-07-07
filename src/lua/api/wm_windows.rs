@@ -7,7 +7,7 @@ use crate::{
         api::utils::{LuaPoint, LuaSize},
         event_handler::LuaEventHandler,
     },
-    lua_typedef, with_hazel,
+    lua_eq, lua_fromlua_userdataonly, lua_typedef, with_hazel,
 };
 
 #[derive(Default)]
@@ -74,6 +74,7 @@ lua_typedef!(WmWindows => WmWindows {
     fn under(point: Point) -> Window;
 });
 
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct WmWindow(pub Window);
 
 impl WmWindow {
@@ -191,8 +192,12 @@ impl UserData for WmWindow {
             Ok(())
         });
         methods.add_method("states", |_, this, _: ()| Ok(this.states()));
+
+        lua_eq!(methods);
     }
 }
+
+lua_fromlua_userdataonly!(WmWindow);
 
 pub struct WindowStates(Window);
 

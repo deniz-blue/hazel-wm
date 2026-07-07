@@ -16,12 +16,14 @@ use smithay_drm_extras::drm_scanner::DrmScanner;
 pub type HazelDrmCompositor =
     DrmCompositor<GbmAllocator<DrmDeviceFd>, GbmFramebufferExporter<DrmDeviceFd>, (), DrmDeviceFd>;
 
+#[derive(Debug)]
 pub struct Surface {
     pub compositor: HazelDrmCompositor,
     pub connector: connector::Handle,
     pub output: Output,
 }
 
+#[derive(Debug)]
 pub struct OutputDevice {
     pub token: RegistrationToken,
     pub render_node: Option<DrmNode>,

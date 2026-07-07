@@ -1,7 +1,7 @@
 use std::{path::Path, process::Stdio, rc::Rc};
 
 use calloop_notify::notify::{RecursiveMode, Watcher};
-use mlua::{HookTriggers, IntoLua, Lua, Result as LuaResult, VmState};
+use mlua::{IntoLua, Lua, Result as LuaResult};
 use tracing::{error, info};
 
 use crate::{
@@ -29,11 +29,6 @@ impl HazelLua {
     pub fn init(&mut self) -> LuaResult<()> {
         self.lua = Lua::new();
         self.wm = Default::default();
-
-		self.lua.set_hook(HookTriggers::new().every_nth_instruction(32000), |_, _| {
-			error!("Lua is taking too long to execute, aborting...");
-			Ok(VmState::Yield)
-		})?;
 
         self.init_globals()?;
 
@@ -101,6 +96,21 @@ impl HazelLua {
                         ),
                         ("status", output.status.code().into_lua(lua)?),
                     ]))
+                })?,
+        )?;
+
+        let tostring: mlua::Function = globals.get("tostring")?;
+        globals.set(
+            "print",
+            self.lua
+                .create_function(move |_, args: mlua::Variadic<mlua::Value>| {
+                    let output = args
+                        .into_iter()
+                        .map(|v| tostring.call::<String>(v))
+                        .collect::<Result<Vec<_>, _>>()?
+                        .join("\t");
+                    info!("print(): {output}");
+                    Ok(())
                 })?,
         )?;
 

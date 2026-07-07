@@ -5,7 +5,7 @@ use smithay::reexports::{
     wayland_server::{Display, DisplayHandle},
 };
 use std::error::Error as StdError;
-use tracing::error;
+use tracing::{error, debug};
 
 use crate::{
     backend::Backend,
@@ -41,11 +41,15 @@ impl Hazel {
         let lua = HazelLua::new_uninit();
         let loop_signal = event_loop.get_signal();
 
+		debug!("Creating backend...");
+
         let backend = if std::env::var("WAYLAND_DISPLAY").is_err() {
             Backend::create_tty(&display_handle, event_loop)
         } else {
             Backend::create_winit(event_loop)
         }?;
+
+		debug!("Backend created: {:?}", backend);
 
         event_loop
             .handle()
@@ -62,7 +66,11 @@ impl Hazel {
             )
             .map_err(|e| Box::new(e) as Box<dyn StdError>)?;
 
+		debug!("Display source inserted into event loop");
+		
         lua.listen(event_loop)?;
+
+		debug!("Lua notify listener inserted into event loop");
 
         let mut this = Self {
             start_time,
@@ -74,6 +82,8 @@ impl Hazel {
         };
 
         this.backend_post_init()?;
+
+		debug!("Backend post-init completed");
 
         Ok(this)
     }

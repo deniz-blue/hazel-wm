@@ -5,6 +5,7 @@ use crate::{
     core::HazelEventLoop,
 };
 
+#[derive(Debug)]
 pub enum Backend {
     Winit(HazelWinitBackend),
     Udev(HazelTtyBackend),
