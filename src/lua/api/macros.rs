@@ -17,9 +17,15 @@ macro_rules! lua_concat {
 #[macro_export]
 macro_rules! lua_eq {
     ($methods:ident) => {
-        $methods.add_meta_function(mlua::MetaMethod::Eq, |_, (left, right): (Self, Self)| {
-            Ok(left == right)
-        })
+        $methods.add_meta_function(
+            mlua::MetaMethod::Eq,
+            |_, (left, right): (mlua::AnyUserData, mlua::AnyUserData)| {
+                Ok(match (left.borrow::<Self>(), right.borrow::<Self>()) {
+                    (Ok(left), Ok(right)) => *left == *right,
+                    _ => false,
+                })
+            },
+        )
     };
 }
 

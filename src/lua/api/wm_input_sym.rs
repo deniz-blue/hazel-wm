@@ -38,6 +38,7 @@ impl UserData for LuaKeysym {
     }
 }
 
+#[derive(Clone)]
 pub struct LuaMouseButton(pub u32);
 
 // <linux/input-event-codes.h>.
@@ -63,6 +64,20 @@ impl LuaMouseButton {
 }
 
 lua_typedef!(MouseButton => LuaMouseButton {});
+
+impl mlua::FromLua for LuaMouseButton {
+    fn from_lua(value: Value, _: &mlua::Lua) -> mlua::Result<Self> {
+        match value {
+            Value::UserData(ud) => Ok(ud.borrow::<Self>()?.clone()),
+            Value::Integer(code) => Ok(Self(code as u32)),
+            other => Err(mlua::Error::FromLuaConversionError {
+                from: other.type_name(),
+                to: "MouseButton".to_owned(),
+                message: Some("expected a Button.* value or a button code".to_owned()),
+            }),
+        }
+    }
+}
 
 impl UserData for LuaMouseButton {
     fn add_methods<M: mlua::prelude::LuaUserDataMethods<Self>>(methods: &mut M) {

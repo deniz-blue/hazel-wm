@@ -11,7 +11,8 @@ macro_rules! lua_typedef {
             $( fn( $($staticparam:ident : $staticparam_tt:tt),* $(,)? ) -> $staticret:ty ; )*
             $( let $field:ident : $field_ty:ty ; )*
             $( use $name:ident => $type:ty ; )*
-            $( fn $method:ident ( $($param:ident : $param_tt:tt),* $(,)? ) -> $ret:ty ; )*
+            $( event $event:ident ( $($event_param:ident : $event_param_ty:ty),* $(,)? ) ; )*
+            $( fn $method:ident ( $($param:ident : $param_tt:ty),* $(,)? ) -> $ret:ty ; )*
         }
     ) => {
         impl $crate::lua::typedefs::LuaTypeDef for $impl_into {
@@ -63,6 +64,19 @@ macro_rules! lua_typedef {
                 $(
                     println!("--- @param event \"{}\"", stringify!($name));
                     println!("--- @param callback fun(e: {})", stringify!($type));
+                    println!("function {}:on(event, callback) end\n", stringify!($class));
+                )*
+
+                $(
+                    println!("--- @param event \"{}\"", stringify!($event));
+                    print!("--- @param callback fun(");
+                    let mut __first = true;
+                    $(
+                        if !__first { print!(", "); }
+                        print!("{}: {}", stringify!($event_param), stringify!($event_param_ty));
+                        __first = false;
+                    )*
+                    println!(")");
                     println!("function {}:on(event, callback) end\n", stringify!($class));
                 )*
             }

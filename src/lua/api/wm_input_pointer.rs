@@ -2,15 +2,26 @@ use std::{cell::Cell, rc::Rc};
 
 use mlua::UserData;
 use smithay::{
-    backend::input::ButtonState,
-    input::pointer::{ButtonEvent, MotionEvent, PointerHandle, RelativeMotionEvent},
-    utils::{Logical, Point, Serial, SERIAL_COUNTER},
+    backend::input::{AxisSource, ButtonState},
+    input::{
+        keyboard::ModifiersState,
+        pointer::{ButtonEvent, MotionEvent, PointerHandle, RelativeMotionEvent},
+    },
+    utils::{Logical, Point, Serial},
 };
 
 use crate::{
-    core::{input::pointer::PointerState, GlobalHazel, Hazel},
+    core::{
+        GlobalHazel, Hazel,
+        input::{pointer_grab::holds_exclusive_grab, scroll::Scroll},
+    },
     lua::api::{
-        utils::LuaPoint, wm_input_seats::WmSeat, wm_input_sym::LuaMouseButton, wm_windows::WmWindow,
+        wm_input_gestures::parse_gesture,
+        utils::LuaPoint,
+        wm_input_keyboard::ModifiersStateUserData,
+        wm_input_seats::WmSeat,
+        wm_input_sym::LuaMouseButton,
+        wm_windows::WmWindow,
     },
     lua_typedef,
 };
@@ -40,34 +51,85 @@ impl UserData for WmInputPointer {
         methods.add_method("buttons", |_, this, _: ()| this.buttons());
         methods.add_method("window_under", |_, this, _: ()| {
             GlobalHazel::with(|hazel| {
-                Ok(hazel
+                hazel
                     .compositor
                     .window_under(this.0.current_location())
-                    .map(|(window, _)| WmWindow(window.clone())))
+                    .map(|(window, _)| WmWindow(window.clone()))
             })
         });
         methods.add_method("move", |_, this, position: LuaPoint<f64, _>| {
-            GlobalHazel::with(|hazel| {
-                let under = hazel.compositor.input_under(position.0);
-                let serial = SERIAL_COUNTER.next_serial();
-                let event = MotionEvent {
-                    location: position.0,
-                    serial,
-                    time: 0,
-                };
-
+            GlobalHazel::try_with(|hazel| {
                 hazel
-                    .compositor
-                    .pointers
-                    .entry(this.0.clone())
-                    .or_insert_with(PointerState::new)
-                    .absolute_previous = position.0;
+                    .move_pointer(&this.0, position.0, 0)
+                    .map_err(|e| mlua::Error::external(e.to_string()))
+            })
+        });
 
-                this.0.motion(hazel, under, &event);
-                this.0.frame(hazel);
+        methods.add_method(
+            "button",
+            |_, this, (button, state): (LuaMouseButton, String)| {
+                let state = match state.as_str() {
+                    "Pressed" | "pressed" => ButtonState::Pressed,
+                    "Released" | "released" => ButtonState::Released,
+                    other => {
+                        return Err(mlua::Error::external(format!(
+                            "button state must be \"pressed\" or \"released\", got {other:?}"
+                        )));
+                    }
+                };
+                GlobalHazel::try_with(|hazel| {
+                    hazel
+                        .press_pointer_button(&this.0, button.0, state, 0)
+                        .map_err(|e| mlua::Error::external(e.to_string()))
+                })
+            },
+        );
+
+        methods.add_method(
+            "scroll",
+            |_, this, (horizontal, vertical, source): (f64, f64, Option<String>)| {
+                let scroll = match source.as_deref().unwrap_or("wheel") {
+                    "wheel" => Scroll::wheel_notches(horizontal, vertical),
+                    "finger" => Scroll::pixels(AxisSource::Finger, horizontal, vertical),
+                    "continuous" => Scroll::pixels(AxisSource::Continuous, horizontal, vertical),
+                    other => {
+                        return Err(mlua::Error::external(format!(
+                            "scroll source must be \"wheel\", \"finger\" or \"continuous\", got {other:?}"
+                        )));
+                    }
+                };
+                GlobalHazel::try_with(|hazel| {
+                    hazel.send_scroll(&this.0, scroll, 0);
+                    Ok(())
+                })
+            },
+        );
+
+        methods.add_method(
+            "gesture",
+            |_, this, (kind, phase, options): (String, String, Option<mlua::Table>)| {
+                let gesture = parse_gesture(&kind, &phase, options)?;
+                GlobalHazel::try_with(|hazel| {
+                    hazel.send_gesture(&this.0, gesture, 0).map_err(mlua::Error::external)
+                })
+            },
+        );
+
+        methods.add_method("grab", |_, this, _: ()| {
+            GlobalHazel::try_with(|hazel| {
+                hazel.grab_pointer_exclusively(&this.0);
                 Ok(())
             })
         });
+
+        methods.add_method("ungrab", |_, this, _: ()| {
+            GlobalHazel::try_with(|hazel| {
+                hazel.release_pointer_grab(&this.0);
+                Ok(())
+            })
+        });
+
+        methods.add_method("grabbed", |_, this, _: ()| Ok(holds_exclusive_grab(&this.0)));
 
         methods.add_method("seat", |_, this, _: ()| {
             GlobalHazel::try_with(|hazel| {
@@ -83,10 +145,15 @@ impl UserData for WmInputPointer {
 }
 
 lua_typedef!(Pointer => WmInputPointer {
-    fn seat() -> Seat;
+    fn seat() -> Option<Seat>;
     fn position() -> Point;
-    fn buttons() -> table<MouseButton>;
+    fn buttons() -> Array<integer>;
     fn window_under() -> Option<Window>;
+    fn scroll(horizontal: number, vertical: number, source: string) -> nil;
+    fn gesture(kind: string, phase: string, options: table) -> nil;
+    fn grab() -> nil;
+    fn ungrab() -> nil;
+    fn grabbed() -> boolean;
 });
 
 #[derive(Clone)]
@@ -96,12 +163,17 @@ pub struct PointerButtonEvent {
     pub button: u32,
     pub state: ButtonState,
     pub pointer: PointerHandle<Hazel>,
+    pub modifiers: ModifiersState,
     pub default_prevented: Rc<Cell<bool>>,
 }
 
 impl PointerButtonEvent {
     pub fn name() -> String {
         String::from("pointer_button")
+    }
+
+    pub fn forwarded_name() -> String {
+        String::from("pointer_button_forwarded")
     }
 
     pub fn button_event(&self) -> ButtonEvent {
@@ -121,6 +193,9 @@ impl UserData for PointerButtonEvent {
         fields.add_field_method_get("pointer", |_, this| {
             Ok(WmInputPointer(this.pointer.clone()))
         });
+        fields.add_field_method_get("modifiers", |_, this| {
+            Ok(ModifiersStateUserData(this.modifiers))
+        });
     }
 
     fn add_methods<M: mlua::prelude::LuaUserDataMethods<Self>>(methods: &mut M) {
@@ -135,6 +210,7 @@ lua_typedef!(PointerButtonEvent => PointerButtonEvent {
     let button: MouseButton;
     let state: string;
     let pointer: Pointer;
+    let modifiers: Modifiers;
     fn prevent_default() -> nil;
 });
 
@@ -146,6 +222,7 @@ pub struct PointerMoveEvent {
     pub output_position: Option<Point<f64, Logical>>,
     pub pointer: PointerHandle<Hazel>,
     pub utime: u64,
+    pub modifiers: ModifiersState,
     pub default_prevented: Rc<Cell<bool>>,
     pub serial: Serial,
 }
@@ -187,6 +264,9 @@ impl UserData for PointerMoveEvent {
         fields.add_field_method_get("pointer", |_, this| {
             Ok(WmInputPointer(this.pointer.clone()))
         });
+        fields.add_field_method_get("modifiers", |_, this| {
+            Ok(ModifiersStateUserData(this.modifiers))
+        });
     }
 
     fn add_methods<M: mlua::prelude::LuaUserDataMethods<Self>>(methods: &mut M) {
@@ -203,5 +283,6 @@ lua_typedef!(PointerMoveEvent => PointerMoveEvent {
     let position: Point;
     let output_position: Option<Point>;
     let pointer: Pointer;
+    let modifiers: Modifiers;
     fn prevent_default() -> nil;
 });

@@ -52,6 +52,7 @@ use crate::{
 };
 
 pub mod drm_handlers;
+pub mod modes;
 pub mod output_device;
 
 #[derive(Debug)]
@@ -108,20 +109,19 @@ impl HazelTtyBackend {
 
         // Compositing
 
-        let primary_gpu = primary_gpu(seat)?
-            .and_then(|x| {
-                DrmNode::from_path(x)
-                    .ok()?
-                    .node_with_type(NodeType::Render)?
-                    .ok()
-            })
-            .unwrap_or_else(|| {
-                all_gpus(seat)
-                    .unwrap()
-                    .into_iter()
-                    .find_map(|x| DrmNode::from_path(x).ok())
-                    .expect("No GPU!")
-            });
+        let preferred_gpu = primary_gpu(seat)?.and_then(|x| {
+            DrmNode::from_path(x)
+                .ok()?
+                .node_with_type(NodeType::Render)?
+                .ok()
+        });
+        let primary_gpu = match preferred_gpu {
+            Some(node) => node,
+            None => all_gpus(seat)?
+                .into_iter()
+                .find_map(|x| DrmNode::from_path(x).ok())
+                .ok_or("no GPU found")?,
+        };
 
         info!("Using GPU: {}", primary_gpu);
 
@@ -247,33 +247,18 @@ impl HazelTtyBackend {
             Ok::<_, Box<dyn std::error::Error>>(render_node)
         };
 
-        let render_node = match try_initialize_gpu() {
-            Ok(render_node) => {
-                debug!("got render node: {render_node}");
-                Some(render_node)
-            }
-            Err(err) => {
-                debug!("failed to initialize renderer, falling back to primary gpu: {err:?}");
-                None
-            }
-        };
-
-        let allocator_gbm = if render_node.is_some() {
-            gbm.clone()
-        } else {
-            panic!("no render node available for device {node}");
-        };
+        let render_node = try_initialize_gpu()
+            .map_err(|err| format!("no render node available for device {node}: {err}"))?;
+        debug!("got render node: {render_node}");
         let gbm_flags = GbmBufferFlags::RENDERING | GbmBufferFlags::SCANOUT;
-        let allocator = GbmAllocator::new(allocator_gbm, gbm_flags);
+        let allocator = GbmAllocator::new(gbm.clone(), gbm_flags);
 
         let handle = loop_handle.clone();
         let token = loop_handle.insert_source(drm_notifier, move |event, meta, state| {
             match event {
                 DrmEvent::VBlank(crtc) => {
-                    let meta = meta.expect("VBlank events must have metadata");
-                    let tty = match &mut state.backend {
-                        Backend::Udev(tty) => tty,
-                        _ => unreachable!(),
+                    let (Some(meta), Backend::Udev(tty)) = (*meta, &mut state.backend) else {
+                        return;
                     };
                     tty.on_vblank(node, crtc, meta);
 
@@ -292,7 +277,7 @@ impl HazelTtyBackend {
 
         let device = OutputDevice {
             token,
-            render_node,
+            render_node: Some(render_node),
             drm,
             gbm,
             allocator,
@@ -365,12 +350,16 @@ impl HazelTtyBackend {
                             subpixel: connector.subpixel().into(),
                             make: "Unknown".to_owned(),
                             model: "Unknown".to_owned(),
+                            serial_number: "Unknown".to_owned(),
                         },
                     );
 
                     let wl_mode = OutputMode::from(drm_mode);
                     output.change_current_state(Some(wl_mode), None, None, None);
                     output.set_preferred(wl_mode);
+                    for mode in connector.modes() {
+                        output.add_mode(OutputMode::from(*mode));
+                    }
 
                     let drm_surface =
                         match device
@@ -390,11 +379,11 @@ impl HazelTtyBackend {
                     });
 
                     let compositor = match DrmCompositor::new(
-                        OutputModeSource::Auto(output.clone()),
+                        OutputModeSource::Auto(output.downgrade()),
                         drm_surface,
                         None, // auto-detect planes
                         device.allocator.clone(),
-                        GbmFramebufferExporter::new(device.gbm.clone(), device.render_node),
+                        GbmFramebufferExporter::new(device.gbm.clone(), device.render_node.into()),
                         SUPPORTED_COLOR_FORMATS,
                         render_formats,
                         device.drm.cursor_size(),
@@ -411,6 +400,7 @@ impl HazelTtyBackend {
                         compositor,
                         connector: connector.handle(),
                         output: output.clone(),
+                        drm_modes: connector.modes().to_vec(),
                     };
 
                     device.surfaces.insert(crtc, surface);

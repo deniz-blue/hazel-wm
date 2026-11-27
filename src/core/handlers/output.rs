@@ -13,4 +13,3 @@ impl OutputHandler for Hazel {
     }
 }
 
-smithay::delegate_output!(Hazel);

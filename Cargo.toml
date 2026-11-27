@@ -16,9 +16,14 @@ mlua-pkg = "0.3.0"
 calloop-notify = "0.2.0"
 tracing = "0.1.44"
 smithay-drm-extras = { version = "0.1.0", default-features = false }
+png = "0.17"
+cosmic-text = "0.17"
+rustix = { version = "1.1.4", features = ["process", "fs"] }
 
 [dependencies.smithay]
-version = "0.7.0"
+git = "https://github.com/Smithay/smithay"
+rev = "4cf0b62028039661477d482ec4758b687d8f4392"
+default-features = false
 features = [
 	"backend_winit",
 	"wayland_frontend",
@@ -34,3 +39,28 @@ features = [
 	"renderer_multi",
 	"use_system_lib",
 ]
+
+[profile.dev.package.smithay]
+debug-assertions = false
+overflow-checks = false
+
+[profile.dev.package.cosmic-text]
+opt-level = 3
+
+[profile.dev.package.swash]
+opt-level = 3
+
+[profile.dev.package.harfrust]
+opt-level = 3
+
+[profile.dev.package.skrifa]
+opt-level = 3
+
+[profile.dev.package.read-fonts]
+opt-level = 3
+
+[profile.dev.package.fontdb]
+opt-level = 3
+
+[profile.dev.package.ttf-parser]
+opt-level = 3

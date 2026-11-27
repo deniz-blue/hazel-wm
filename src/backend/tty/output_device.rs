@@ -9,7 +9,10 @@ use smithay::{
         },
     },
     output::Output,
-    reexports::{calloop::RegistrationToken, drm::control::connector, drm::control::crtc},
+    reexports::{
+        calloop::RegistrationToken,
+        drm::control::{Mode as DrmMode, connector, crtc},
+    },
 };
 use smithay_drm_extras::drm_scanner::DrmScanner;
 
@@ -21,6 +24,7 @@ pub struct Surface {
     pub compositor: HazelDrmCompositor,
     pub connector: connector::Handle,
     pub output: Output,
+    pub drm_modes: Vec<DrmMode>,
 }
 
 #[derive(Debug)]

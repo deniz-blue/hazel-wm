@@ -2,19 +2,23 @@ use std::{cell::Cell, error::Error as StdError, rc::Rc};
 
 use smithay::{
     backend::input::{
-        AbsolutePositionEvent, Axis, AxisRelativeDirection, ButtonState, Device, Event,
+        AbsolutePositionEvent, Axis, ButtonState, Device, Event,
         InputBackend, PointerAxisEvent, PointerButtonEvent as SmithayPointerButtonEvent,
         PointerMotionEvent,
     },
-    input::pointer::AxisFrame,
-    utils::SERIAL_COUNTER,
-    wayland::shell::wlr_layer::Layer,
+    input::pointer::PointerHandle,
+    reexports::wayland_server::protocol::wl_surface::WlSurface,
+    utils::{Logical, Point, SERIAL_COUNTER},
 };
 
 use crate::{
     core::{
         Hazel,
-        input::pointer::{PointerAbsoluteMapping, PointerState},
+        input::{
+            pointer::{PointerAbsoluteMapping, PointerState},
+            pointer_constraints::{ConstraintEffect, clamp_to},
+            scroll::Scroll,
+        },
     },
     lua::{
         api::wm_input_pointer::{PointerButtonEvent, PointerMoveEvent},
@@ -28,32 +32,22 @@ impl Hazel {
         event: B::PointerButtonEvent,
     ) -> std::result::Result<(), Box<dyn StdError>> {
         let device_id = event.device().id();
-        let button = event.button_code();
-        let state = event.state();
+        let Some((_, pointer)) = self.compositor.get_pointer_handle(&device_id) else {
+            return Ok(());
+        };
+
+        self.press_pointer_button(&pointer, event.button_code(), event.state(), event.time())
+    }
+
+    pub fn press_pointer_button(
+        &mut self,
+        pointer: &PointerHandle<Hazel>,
+        button: u32,
+        state: ButtonState,
+        utime: u64,
+    ) -> std::result::Result<(), Box<dyn StdError>> {
+        self.notify_idle_activity();
         let serial = SERIAL_COUNTER.next_serial();
-        let utime = event.time();
-
-        let (seat, pointer) = self.compositor.get_pointer_handle(&device_id).unwrap();
-        let pointer_pos = pointer.current_location();
-
-        // Raise for windows (only if no top layer consumed the position)
-        if self
-            .compositor
-            .layer_under(pointer_pos, &[Layer::Overlay, Layer::Top])
-            .is_none()
-        {
-            if let Some((window, _, _)) = self.compositor.surface_under(pointer_pos) {
-                self.compositor.space.raise_element(&window, true);
-            }
-        }
-
-        if let Some((surface, _)) = self.compositor.input_under(pointer_pos) {
-            if let Some(keyboard) = seat.get_keyboard() {
-                keyboard.set_focus(self, Some(surface), serial);
-            }
-        } else if let Some(keyboard) = seat.get_keyboard() {
-            keyboard.set_focus(self, None, serial);
-        }
 
         let pressed = &mut self
             .compositor
@@ -74,6 +68,7 @@ impl Hazel {
             serial,
             utime,
             pointer: pointer.clone(),
+            modifiers: self.compositor.modifiers_of_pointer(pointer),
             default_prevented: Rc::new(Cell::new(false)),
         };
 
@@ -87,6 +82,11 @@ impl Hazel {
         if !event.default_prevented.get() {
             pointer.button(self, &event.button_event());
             pointer.frame(self);
+            self.wm()
+                .input
+                .events
+                .emit(PointerButtonEvent::forwarded_name(), event)
+                .into_box()?;
         }
 
         Ok(())
@@ -97,26 +97,63 @@ impl Hazel {
         event: B::PointerMotionEvent,
     ) -> std::result::Result<(), Box<dyn StdError>> {
         let device_id = event.device().id();
-        let delta = event.delta();
-        let delta_unaccel = event.delta_unaccel();
-        let utime = event.time();
-
-        let (_, pointer) = self.compositor.get_pointer_handle(&device_id).unwrap();
-
-        let new_position = pointer.current_location() + delta;
-        let under = self.compositor.input_under(new_position);
+        let Some((_, pointer)) = self.compositor.get_pointer_handle(&device_id) else {
+            return Ok(());
+        };
 
         let event = PointerMoveEvent {
             default_prevented: Rc::new(Cell::new(false)),
             pointer: pointer.clone(),
             serial: SERIAL_COUNTER.next_serial(),
+            modifiers: self.compositor.modifiers_of_pointer(&pointer),
+            utime: event.time(),
+            delta: event.delta(),
+            delta_unaccel: event.delta_unaccel(),
+            output_position: None,
+            position: pointer.current_location() + event.delta(),
+        };
+        self.send_pointer_motion(event)
+    }
+
+    pub fn move_pointer(
+        &mut self,
+        pointer: &PointerHandle<Hazel>,
+        position: Point<f64, Logical>,
+        utime: u64,
+    ) -> std::result::Result<(), Box<dyn StdError>> {
+        let delta = position - pointer.current_location();
+        self.compositor
+            .pointers
+            .entry(pointer.clone())
+            .or_insert_with(PointerState::new)
+            .absolute_previous = position;
+        self.send_pointer_motion(PointerMoveEvent {
+            default_prevented: Rc::new(Cell::new(false)),
+            pointer: pointer.clone(),
+            serial: SERIAL_COUNTER.next_serial(),
+            modifiers: self.compositor.modifiers_of_pointer(pointer),
             utime,
             delta,
-            delta_unaccel,
+            delta_unaccel: delta,
             output_position: None,
-            position: new_position,
-        };
+            position,
+        })
+    }
 
+    fn send_pointer_motion(
+        &mut self,
+        mut event: PointerMoveEvent,
+    ) -> std::result::Result<(), Box<dyn StdError>> {
+        self.notify_idle_activity();
+        let pointer = event.pointer.clone();
+        let held = self.compositor.input_under(pointer.current_location());
+        let effect = self.constraint_effect(&pointer, held.as_ref());
+        let locked = matches!(effect, ConstraintEffect::Locked);
+        match &effect {
+            ConstraintEffect::Locked => event.position = pointer.current_location(),
+            ConstraintEffect::ConfinedTo(bounds) => event.position = clamp_to(*bounds, event.position),
+            ConstraintEffect::Free => {}
+        }
         // Lua first — prevent_default can skip the actual pointer op
         self.wm()
             .input
@@ -125,11 +162,27 @@ impl Hazel {
             .into_box()?;
 
         if !event.default_prevented.get() {
-            pointer.motion(self, under, &event.motion());
-            pointer.frame(self);
+            self.forward_pointer_motion(&event, held, locked);
         }
-
         Ok(())
+    }
+
+    fn forward_pointer_motion(
+        &mut self,
+        event: &PointerMoveEvent,
+        held: Option<(WlSurface, Point<f64, Logical>)>,
+        locked: bool,
+    ) {
+        let pointer = &event.pointer;
+        if locked {
+            pointer.relative_motion(self, held, &event.relative_motion());
+            pointer.frame(self);
+            return;
+        }
+        let under = self.compositor.input_under(event.position);
+        pointer.motion(self, under.clone(), &event.motion());
+        pointer.relative_motion(self, under, &event.relative_motion());
+        pointer.frame(self);
     }
 
     pub fn on_pointer_absolute<B: InputBackend>(
@@ -137,7 +190,9 @@ impl Hazel {
         event: B::PointerMotionAbsoluteEvent,
     ) -> std::result::Result<(), Box<dyn StdError>> {
         let device_id = event.device().id();
-        let (_, pointer_handle) = self.compositor.get_pointer_handle(&device_id).unwrap();
+        let Some((_, pointer_handle)) = self.compositor.get_pointer_handle(&device_id) else {
+            return Ok(());
+        };
 
         let previous_output_position = self
             .compositor
@@ -177,8 +232,6 @@ impl Hazel {
         let location = location_output + coordinate_space.loc.to_f64();
         let utime = event.time();
 
-        let under = self.compositor.input_under(location);
-
         let delta = location_output - previous_output_position;
 
         self.compositor
@@ -187,7 +240,7 @@ impl Hazel {
             .or_insert_with(PointerState::new)
             .absolute_previous = location_output;
 
-        let event = PointerMoveEvent {
+        self.send_pointer_motion(PointerMoveEvent {
             default_prevented: Rc::new(Cell::new(false)),
             pointer: pointer_handle.clone(),
             delta,
@@ -195,22 +248,9 @@ impl Hazel {
             output_position: Some(location_output),
             position: location,
             serial,
+            modifiers: self.compositor.modifiers_of_pointer(&pointer_handle),
             utime,
-        };
-
-        // Lua first — prevent_default can skip the actual pointer op
-        self.wm()
-            .input
-            .events
-            .emit(PointerMoveEvent::name(), event.clone())
-            .into_box()?;
-
-        if !event.default_prevented.get() {
-            pointer_handle.motion(self, under, &event.motion());
-            pointer_handle.frame(self);
-        }
-
-        Ok(())
+        })
     }
 
     pub fn on_pointer_axis<B: InputBackend>(
@@ -219,28 +259,24 @@ impl Hazel {
     ) -> std::result::Result<(), Box<dyn StdError>> {
         let device_id = event.device().id();
 
-        let (_, pointer) = self.compositor.get_pointer_handle(&device_id).unwrap();
+        let Some((_, pointer)) = self.compositor.get_pointer_handle(&device_id) else {
+            return Ok(());
+        };
 
-        pointer.axis(
-            self,
-            AxisFrame {
-                axis: (
-                    event.amount(Axis::Horizontal).unwrap_or_default(),
-                    event.amount(Axis::Vertical).unwrap_or_default(),
-                ),
-                source: Some(event.source()),
-                time: event.time_msec(),
-                stop: (false, false),
-                relative_direction: (
-                    AxisRelativeDirection::Identical,
-                    AxisRelativeDirection::Identical,
-                ),
-                v120: None, // eeh later
-            },
-        );
-
-        pointer.frame(self);
-
+        let scroll = Scroll {
+            source: event.source(),
+            horizontal: event.amount(Axis::Horizontal),
+            vertical: event.amount(Axis::Vertical),
+            horizontal_v120: event.amount_v120(Axis::Horizontal),
+            vertical_v120: event.amount_v120(Axis::Vertical),
+        };
+        self.send_scroll(&pointer, scroll, event.time_msec());
         Ok(())
+    }
+
+    pub fn send_scroll(&mut self, pointer: &PointerHandle<Hazel>, scroll: Scroll, time: u32) {
+        self.notify_idle_activity();
+        pointer.axis(self, scroll.axis_frame(time));
+        pointer.frame(self);
     }
 }

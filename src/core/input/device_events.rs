@@ -3,7 +3,7 @@ use smithay::{
     input::keyboard::XkbConfig,
 };
 use std::error::Error as StdError;
-use tracing::info;
+use tracing::{error, info};
 
 use crate::{
     core::{Hazel, input::pointer::PointerState},
@@ -37,11 +37,18 @@ impl Hazel {
 
         if device.has_capability(DeviceCapability::Keyboard) {
             info!("Adding keyboard capability to seat {seat_to_assign}");
-            let keyboard = seat.add_keyboard(XkbConfig::default(), 200, 25).unwrap();
-            self.wm()
-                .input
-                .events
-                .emit(String::from("new_keyboard"), WmInputKeyboard(keyboard))?;
+            match seat.add_keyboard(
+                XkbConfig::default(),
+                self.compositor.key_repeat.delay,
+                self.compositor.key_repeat.rate,
+            ) {
+                Ok(keyboard) => self
+                    .wm()
+                    .input
+                    .events
+                    .emit(String::from("new_keyboard"), WmInputKeyboard(keyboard))?,
+                Err(e) => error!("Could not add keyboard to seat {seat_to_assign}: {e}"),
+            }
         }
 
         if device.has_capability(DeviceCapability::Pointer) {

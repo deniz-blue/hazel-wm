@@ -14,12 +14,34 @@ use crate::{
 };
 
 pub mod backend_post_init;
+pub mod capture;
 pub mod client_state;
 pub mod compositor;
+pub mod drawing;
+pub mod fd_transfer;
+pub mod focus;
 pub mod handlers;
 pub mod input;
+pub mod locking;
+pub mod lua_loading;
 pub mod outputs;
+pub mod popups;
+pub mod processes;
+pub mod presentation;
 pub mod render;
+pub mod screenshot;
+pub mod session_lock;
+pub mod shell_window;
+pub mod window_borders;
+pub mod window_drag;
+pub mod window_layers;
+pub mod window_lifecycle;
+pub mod layer_properties;
+pub mod window_mapping;
+pub mod window_state;
+pub mod window_visibility;
+pub mod clipboard;
+pub mod clipboard_access;
 
 pub struct Hazel {
     pub start_time: Instant,
@@ -28,16 +50,18 @@ pub struct Hazel {
     pub compositor: HazelCompositor,
     pub backend: Backend,
     pub lua: HazelLua,
+    pub processes: processes::Processes,
+    pub reload_requested: bool,
 }
 
-pub type HazelEventLoop<'a> = EventLoop<'a, Hazel>;
+pub type HazelEventLoop = EventLoop<'static, Hazel>;
 
 impl Hazel {
     pub fn new(event_loop: &mut HazelEventLoop) -> std::result::Result<Self, Box<dyn StdError>> {
         let start_time = std::time::Instant::now();
         let display = Display::new().map_err(|e| Box::new(e) as Box<dyn StdError>)?;
         let display_handle = display.handle();
-        let compositor = HazelCompositor::new(event_loop, &display_handle);
+        let mut compositor = HazelCompositor::new(event_loop, &display_handle)?;
         let lua = HazelLua::new_uninit();
         let loop_signal = event_loop.get_signal();
 
@@ -46,7 +70,7 @@ impl Hazel {
         let backend = if std::env::var("WAYLAND_DISPLAY").is_err() {
             Backend::create_tty(&display_handle, event_loop)
         } else {
-            Backend::create_winit(event_loop)
+            Backend::create_winit(&display_handle, &mut compositor.smithay.dmabuf_state, event_loop)
         }?;
 
 		debug!("Backend created: {:?}", backend);
@@ -79,6 +103,8 @@ impl Hazel {
             compositor,
             lua,
             backend,
+            processes: processes::Processes::default(),
+            reload_requested: false,
         };
 
         this.backend_post_init()?;
@@ -91,6 +117,27 @@ impl Hazel {
     pub fn wm(&self) -> Rc<Wm> {
         self.lua.wm.clone()
     }
+
+    fn deliver_clipboard_events(&mut self) {
+        let changes = self.compositor.clipboard.take_changes();
+        let reads = self.compositor.clipboard.take_finished_reads();
+        let clipboard = self.wm().clipboard.clone();
+        clipboard.deliver_changes(&self.lua.lua, changes);
+        clipboard.deliver_reads(&self.lua.lua, reads);
+    }
+
+    pub fn run_scheduled_work(&mut self) {
+        let now = self.start_time.elapsed().as_millis() as u64;
+        self.wm().timers.fire_due(&self.lua.lua, now);
+        let wm = self.wm();
+        self.deliver_clipboard_events();
+        for event in self.processes.poll(std::time::Instant::now()) {
+            wm.processes.dispatch(&self.lua.lua, event);
+        }
+        if std::mem::take(&mut self.reload_requested) {
+            self.load_lua();
+        }
+    }
 }
 
 thread_local! {
@@ -102,23 +149,19 @@ pub struct GlobalHazel;
 impl GlobalHazel {
     pub fn execute<R>(hazel: &mut Hazel, f: impl FnOnce(&mut Hazel) -> R) -> R {
         let ptr = hazel as *mut Hazel;
-        HAZEL.with(|cell| cell.set(Some(ptr)));
-        struct Guard;
+        let previous = HAZEL.with(|cell| cell.replace(Some(ptr)));
+        struct Guard(Option<*mut Hazel>);
         impl Drop for Guard {
             fn drop(&mut self) {
-                HAZEL.with(|cell| cell.set(None));
+                HAZEL.with(|cell| cell.set(self.0));
             }
         }
-        let _guard = Guard;
+        let _guard = Guard(previous);
         f(hazel)
     }
 
-    pub fn with<T>(f: impl FnOnce(&mut Hazel) -> T) -> T {
-        HAZEL.with(|cell| {
-            let ptr = cell.get().expect("Expected GlobalHazel to be set");
-            let hazel = unsafe { &mut *ptr };
-            f(hazel)
-        })
+    pub fn with<T>(f: impl FnOnce(&mut Hazel) -> T) -> mlua::Result<T> {
+        Self::try_with(|hazel| Ok(f(hazel)))
     }
 
     pub fn try_with<T, F>(f: F) -> mlua::Result<T>

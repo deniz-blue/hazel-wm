@@ -9,7 +9,7 @@ use smithay::{
 
 use crate::core::{
     Hazel,
-    client_state::ClientState,
+    client_state::{compositor_client_state, surface_created},
     handlers::{layer_shell, xdg_shell},
 };
 
@@ -19,52 +19,51 @@ impl CompositorHandler for Hazel {
     }
 
     fn client_compositor_state<'a>(&self, client: &'a Client) -> &'a CompositorClientState {
-        &client.get_data::<ClientState>().unwrap().compositor_state
+        compositor_client_state(client)
+    }
+
+    fn new_surface(&mut self, surface: &WlSurface) {
+        surface_created(surface);
     }
 
     fn commit(&mut self, surface: &WlSurface) {
         on_commit_buffer_handler::<Self>(surface);
+        self.lock_surface_committed(surface);
         if !is_sync_subsurface(surface) {
             let mut root = surface.clone();
             while let Some(parent) = get_parent(&root) {
                 root = parent;
             }
-            if let Some(window) = self
-                .compositor
-                .space
-                .elements()
-                .find(|w| w.toplevel().unwrap().wl_surface() == &root)
-            {
+            if let Some(window) = self.compositor.window_with_root_surface(&root) {
                 window.on_commit();
             }
         };
 
-        xdg_shell::handle_commit(
-            &mut self.compositor.smithay.popups,
-            &self.compositor.space,
-            surface,
-        );
+        xdg_shell::handle_commit(&mut self.compositor, surface);
+        self.emit_window_mapped(surface);
+        self.emit_window_resized(surface);
         // resize_grab::handle_commit(&mut self.compositor.space, surface);
 
-        // Handle layer-surface commits — find which output this surface belongs to.
-        for output in self.compositor.space.outputs() {
-            let map = layer_map_for_output(output);
-            if map
-                .layer_for_surface(surface, WindowSurfaceType::TOPLEVEL)
-                .is_some()
-            {
-                drop(map);
-                layer_shell::handle_commit(output, surface);
-                break;
-            }
-            drop(map);
+        let layer_output = self
+            .compositor
+            .space
+            .outputs()
+            .find(|output| {
+                layer_map_for_output(output)
+                    .layer_for_surface(surface, WindowSurfaceType::TOPLEVEL)
+                    .is_some()
+            })
+            .cloned();
+        if let Some(output) = layer_output {
+            layer_shell::handle_commit(&output, surface);
+            self.emit_layer_mapped(&output, surface);
+            self.emit_layers_changed(&output);
         }
 
-        self.wm()
+        let _ = self
+            .wm()
             .events
-            .emit("commit".to_string(), surface.id().protocol_id())
-            .unwrap();
+            .emit("commit".to_string(), surface.id().protocol_id());
     }
 }
 
-smithay::delegate_compositor!(Hazel);

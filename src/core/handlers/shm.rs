@@ -18,4 +18,3 @@ impl ShmHandler for Hazel {
     }
 }
 
-smithay::delegate_shm!(Hazel);

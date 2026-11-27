@@ -1,3 +1,4 @@
+use crate::core::input::gestures::ActiveGesture;
 use smithay::{
     input::pointer::CursorImageStatus,
     output::Output,
@@ -13,6 +14,7 @@ pub struct PointerState {
     pub absolute_previous: Point<f64, Logical>,
     /// Cursor image (surface or named icon).
     pub cursor_status: CursorImageStatus,
+    pub gesture: Option<ActiveGesture>,
 }
 
 impl Default for PointerState {
@@ -28,6 +30,7 @@ impl PointerState {
             mapping: PointerAbsoluteMapping::FirstContainingOutput,
             absolute_previous: (0.0, 0.0).into(),
             cursor_status: CursorImageStatus::default_named(),
+            gesture: None,
         }
     }
 }

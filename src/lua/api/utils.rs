@@ -1,4 +1,5 @@
 use std::{
+    cmp::{max, min},
     fmt::Display,
     ops::{Div, Mul},
 };
@@ -32,6 +33,15 @@ impl<N: FromLua + Coordinate + 'static, Kind: 'static> FromLua for LuaSize<N, Ki
             if let Ok(size) = ud.borrow::<LuaSize<N, Kind>>() {
                 return Ok(LuaSize(size.0));
             }
+            if let Ok(size) = ud.borrow::<LuaSize<f64, Kind>>() {
+                return Ok(LuaSize(Size::new(N::from_f64(size.0.w), N::from_f64(size.0.h))));
+            }
+            if let Ok(size) = ud.borrow::<LuaSize<i32, Kind>>() {
+                return Ok(LuaSize(Size::new(
+                    N::from_f64(size.0.w.to_f64()),
+                    N::from_f64(size.0.h.to_f64()),
+                )));
+            }
         }
         let mlua::Value::Table(table) = value else {
             return Err(mlua::Error::FromLuaConversionError {
@@ -41,10 +51,12 @@ impl<N: FromLua + Coordinate + 'static, Kind: 'static> FromLua for LuaSize<N, Ki
             });
         };
 
-        Ok(LuaSize(Size::new(
-            table.get("width").or(table.get(0))?,
-            table.get("height").or(table.get(1))?,
-        )))
+        let width: N = table.get("width").or(table.get(1))?;
+        let height: N = table.get("height").or(table.get(2))?;
+        if !(width.non_negative() && height.non_negative()) {
+            return Err(mlua::Error::external("a size cannot be negative or NaN"));
+        }
+        Ok(LuaSize(Size::new(width, height)))
     }
 }
 
@@ -125,6 +137,15 @@ impl<N: FromLua + Coordinate + 'static, Kind: 'static> FromLua for LuaPoint<N, K
             if let Ok(point) = ud.borrow::<LuaPoint<N, Kind>>() {
                 return Ok(LuaPoint(point.0));
             }
+            if let Ok(point) = ud.borrow::<LuaPoint<f64, Kind>>() {
+                return Ok(LuaPoint(Point::new(N::from_f64(point.0.x), N::from_f64(point.0.y))));
+            }
+            if let Ok(point) = ud.borrow::<LuaPoint<i32, Kind>>() {
+                return Ok(LuaPoint(Point::new(
+                    N::from_f64(point.0.x.to_f64()),
+                    N::from_f64(point.0.y.to_f64()),
+                )));
+            }
         }
         let mlua::Value::Table(table) = value else {
             return Err(mlua::Error::FromLuaConversionError {
@@ -135,8 +156,8 @@ impl<N: FromLua + Coordinate + 'static, Kind: 'static> FromLua for LuaPoint<N, K
         };
 
         Ok(LuaPoint(Point::new(
-            table.get("x").or(table.get(0))?,
-            table.get("y").or(table.get(1))?,
+            table.get("x").or(table.get(1))?,
+            table.get("y").or(table.get(2))?,
         )))
     }
 }
@@ -162,24 +183,43 @@ impl LuaRect {
         self.0.intersection(other.0).map(LuaRect)
     }
 
-    /// Returns the smallest rect that contains both.
-    pub fn merge(&self, other: &LuaRect) -> LuaRect {
-        use smithay::utils::Coordinate;
-        let min_x = Coordinate::min(self.0.loc.x, other.0.loc.x);
-        let min_y = Coordinate::min(self.0.loc.y, other.0.loc.y);
-        let max_x = Coordinate::max(self.0.loc.x + self.0.size.w, other.0.loc.x + other.0.size.w);
-        let max_y = Coordinate::max(self.0.loc.y + self.0.size.h, other.0.loc.y + other.0.size.h);
-        LuaRect(Rectangle::from_extremities(
-            (min_x, min_y),
-            (max_x, max_y),
-        ))
+    pub fn merge(&self, other: &LuaRect) -> mlua::Result<LuaRect> {
+        let (a, b) = (&self.0, &other.0);
+        let min_x = i64::from(min(a.loc.x, b.loc.x));
+        let min_y = i64::from(min(a.loc.y, b.loc.y));
+        let max_x = max(i64::from(a.loc.x) + i64::from(a.size.w), i64::from(b.loc.x) + i64::from(b.size.w));
+        let max_y = max(i64::from(a.loc.y) + i64::from(a.size.h), i64::from(b.loc.y) + i64::from(b.size.h));
+        Self::from_extents(min_x, min_y, max_x - min_x, max_y - min_y)
     }
 
-    pub fn inset(&self, amount: i32) -> LuaRect {
-        LuaRect(Rectangle::from_extremities(
-            (self.0.loc.x + amount, self.0.loc.y + amount),
-            (self.0.loc.x + self.0.size.w - amount, self.0.loc.y + self.0.size.h - amount),
-        ))
+    pub fn inset(&self, amount: i32) -> mlua::Result<LuaRect> {
+        let amount = i64::from(amount);
+        let rect = &self.0;
+        Self::from_extents(
+            i64::from(rect.loc.x) + amount,
+            i64::from(rect.loc.y) + amount,
+            max(i64::from(rect.size.w) - 2 * amount, 0),
+            max(i64::from(rect.size.h) - 2 * amount, 0),
+        )
+    }
+
+    pub fn from_extents(x: i64, y: i64, width: i64, height: i64) -> mlua::Result<LuaRect> {
+        let fits = |value: i64| i32::try_from(value).is_ok();
+        if width < 0 || height < 0 {
+            return Err(mlua::Error::external("a rect cannot have a negative size"));
+        }
+        if !(fits(x) && fits(y) && fits(width) && fits(height) && fits(x + width) && fits(y + height)) {
+            return Err(mlua::Error::external("a rect must stay within the 32-bit coordinate range"));
+        }
+        Ok(LuaRect(Rectangle::new((x as i32, y as i32).into(), (width as i32, height as i32).into())))
+    }
+
+    pub fn from_table(table: &mlua::Table) -> mlua::Result<LuaRect> {
+        let x: i32 = table.get("x").or(table.get(1))?;
+        let y: i32 = table.get("y").or(table.get(2))?;
+        let width: i32 = table.get("width").or(table.get(3))?;
+        let height: i32 = table.get("height").or(table.get(4))?;
+        Self::from_extents(x.into(), y.into(), width.into(), height.into())
     }
 }
 
@@ -201,11 +241,7 @@ impl LuaRect {
                     message: Some("expected 1 table or 4 numbers".to_string()),
                 }),
             };
-            let x: i32 = table.get("x").or(table.get(1))?;
-            let y: i32 = table.get("y").or(table.get(2))?;
-            let w: i32 = table.get("width").or(table.get(3))?;
-            let h: i32 = table.get("height").or(table.get(4))?;
-            Ok(LuaRect(Rectangle::new((x, y).into(), (w, h).into())))
+            LuaRect::from_table(&table)
         })
     }
 }
@@ -225,12 +261,7 @@ impl FromLua for LuaRect {
             });
         };
 
-        let x: i32 = table.get("x").or(table.get(1))?;
-        let y: i32 = table.get("y").or(table.get(2))?;
-        let w: i32 = table.get("width").or(table.get(3))?;
-        let h: i32 = table.get("height").or(table.get(4))?;
-
-        Ok(LuaRect(Rectangle::new((x, y).into(), (w, h).into())))
+        LuaRect::from_table(&table)
     }
 }
 
@@ -264,12 +295,8 @@ impl UserData for LuaRect {
         methods.add_method("intersection", |_, this, other: LuaRect| {
             Ok(this.intersection(&other))
         });
-        methods.add_method("merge", |_, this, other: LuaRect| {
-            Ok(this.merge(&other))
-        });
-        methods.add_method("inset", |_, this, amount: i32| {
-            Ok(this.inset(amount))
-        });
+        methods.add_method("merge", |_, this, other: LuaRect| this.merge(&other));
+        methods.add_method("inset", |_, this, amount: i32| this.inset(amount));
     }
 }
 
@@ -282,7 +309,7 @@ lua_typedef!(Rect => LuaRect {
     let height: number;
     fn contains(point: Point) -> boolean;
     fn intersects(other: Rect) -> boolean;
-    fn intersection(other: Rect) -> Rect;
+    fn intersection(other: Rect) -> Option<Rect>;
     fn merge(other: Rect) -> Rect;
     fn inset(amount: number) -> Rect;
 });

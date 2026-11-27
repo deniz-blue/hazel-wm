@@ -4,12 +4,17 @@ pub mod backend;
 pub mod core;
 pub mod lua;
 
+use crate::core::shell_window::ShellWindow;
+use std::time::Duration;
+
 use smithay::reexports::calloop::EventLoop;
 use tracing::{error, info, debug};
 
 use crate::core::{GlobalHazel, Hazel, HazelEventLoop};
-use crate::lua::api::wm_outputs::WmOutputHandle;
 use crate::lua::export_typedefs::dump_typedefs;
+
+const LOOP_INTERVAL: Duration = Duration::from_millis(20);
+const CHILD_EXIT_GRACE: Duration = Duration::from_millis(500);
 
 fn main() {
     if std::env::args().any(|arg| arg == "--dump-typedefs") {
@@ -40,56 +45,33 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     unsafe { std::env::set_var("WAYLAND_DISPLAY", &state.compositor.socket_name) };
 	debug!("WAYLAND_DISPLAY set to {}", state.compositor.socket_name.display());
 
-    GlobalHazel::execute(&mut state, |hazel| {
-		info!("Initializing Lua...");
-
-        if let Err(e) = hazel.lua.init() {
-            error!("Error initializing Lua: {e}");
-			return;
-        }
-
-        let outputs = hazel.compositor.space.outputs();
-        for output in outputs {
-            hazel
-                .wm()
-                .outputs
-                .events
-                .emit("added".to_owned(), WmOutputHandle(output.downgrade()))
-                .expect("Failed to emit output added event");
-        }
-
-        hazel
-            .wm()
-            .events
-            .emit("ready".to_owned(), ())
-            .expect("Failed to emit ready event");
-
-        info!("Initialized Lua");
-    });
+    GlobalHazel::execute(&mut state, |hazel| hazel.load_lua());
 
 	info!("Starting event loop...");
 
     event_loop
-        .run(None, &mut state, move |hazel| {
+        .run(Some(LOOP_INTERVAL), &mut state, move |hazel| {
             GlobalHazel::execute(hazel, |hazel| {
-                hazel
-                    .wm()
-                    .events
-                    .emit("tick".to_owned(), ())
-                    .expect("Failed to emit tick event");
+                hazel.emit_pending_focus_changes();
+                let _ = hazel.wm().events.emit("tick".to_owned(), ());
+                hazel.run_scheduled_work();
             });
 
+            hazel.compositor.restack();
+            hazel.sync_foreign_toplevels();
+            hazel.sync_foreign_toplevel_list();
             hazel.compositor.space.refresh();
             hazel.compositor.smithay.popups.cleanup();
             let _ = hazel.display_handle.flush_clients();
 
-            hazel.compositor.space.elements().for_each(|window| {
-                window.toplevel().unwrap().send_pending_configure();
-            });
+            for window in hazel.compositor.all_windows() {
+                window.send_pending_configure();
+            }
         })
         .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
 
 	info!("Event loop exited, shutting down...");
+    state.processes.terminate_all(CHILD_EXIT_GRACE);
 
     Ok(())
 }

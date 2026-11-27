@@ -3,9 +3,8 @@ use smithay::wayland::selection::data_device::{DataDeviceHandler, DataDeviceStat
 use crate::core::Hazel;
 
 impl DataDeviceHandler for Hazel {
-    fn data_device_state(&self) -> &DataDeviceState {
-        &self.compositor.smithay.data_device_state
+    fn data_device_state(&mut self) -> &mut DataDeviceState {
+        &mut self.compositor.smithay.data_device_state
     }
 }
 
-smithay::delegate_data_device!(Hazel);

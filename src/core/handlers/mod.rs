@@ -1,10 +1,30 @@
+use crate::core::Hazel;
+
 pub mod compositor;
+pub mod data_control;
+pub mod dmabuf;
 pub mod data_device;
 pub mod dnd_grab;
+pub mod foreign_toplevel;
+pub mod foreign_toplevel_list;
+pub mod fractional_scale;
+pub mod idle;
+pub mod input_method;
+pub mod image_copy_capture;
 pub mod kde;
 pub mod layer_shell;
 pub mod output;
+pub mod screencopy;
+pub mod pointer_constraints;
+pub mod pointer_gestures;
 pub mod seat;
+pub mod session_lock;
+pub mod shortcuts_inhibit;
 pub mod selection;
 pub mod shm;
+pub mod system_bell;
+pub mod xdg_activation;
+pub mod xdg_decoration;
 pub mod xdg_shell;
+
+smithay::delegate_dispatch2!(Hazel);

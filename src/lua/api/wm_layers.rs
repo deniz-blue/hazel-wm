@@ -1,12 +1,17 @@
-use mlua::UserData;
+use mlua::{Lua, Table, UserData};
 use smithay::{
-    desktop::{LayerSurface as DesktopLayerSurface, WindowSurfaceType, layer_map_for_output},
+    desktop::{LayerSurface as DesktopLayerSurface, layer_map_for_output},
     utils::Logical,
-    wayland::shell::wlr_layer::Layer as LayerDepth,
+    wayland::shell::wlr_layer::{Anchor, KeyboardInteractivity, Layer as LayerDepth},
 };
 
 use crate::{
-    impl_lua_event_handler, impl_lua_event_source,
+    core::{
+        GlobalHazel,
+        handlers::layer_shell::LayerOutput,
+        layer_properties::{LayerProperties, edge_name},
+    },
+    impl_lua_event_handler, impl_lua_event_source, lua_eq, lua_fromlua_userdataonly,
     lua::{
         api::{
             utils::{LuaPoint, LuaSize},
@@ -29,14 +34,14 @@ impl UserData for WmLayers {
         impl_lua_event_handler!(methods);
 
         methods.add_method("count", |_, _, _: ()| {
-            with_hazel!(hazel => Ok(hazel.compositor.space.outputs().flat_map(|o| {
+            GlobalHazel::try_with(|hazel| Ok(hazel.compositor.space.outputs().flat_map(|o| {
                 let map = layer_map_for_output(o);
                 map.layers().cloned().collect::<Vec<_>>()
             }).count()))
         });
 
         methods.add_method("get", |_, _, index: usize| {
-            with_hazel!(hazel => {
+            GlobalHazel::try_with(|hazel| {
                 let idx = index.checked_sub(1);
                 Ok(idx.and_then(|i| {
                     hazel.compositor.space.outputs().flat_map(|o| {
@@ -48,7 +53,7 @@ impl UserData for WmLayers {
         });
 
         methods.add_method("all", |_, _, _: ()| {
-            with_hazel!(hazel => {
+            GlobalHazel::try_with(|hazel| {
                 Ok(hazel.compositor.space.outputs().flat_map(|o| {
                     let map = layer_map_for_output(o);
                     map.layers().cloned().map(LayerHandle).collect::<Vec<_>>()
@@ -57,7 +62,7 @@ impl UserData for WmLayers {
         });
 
         methods.add_method("namespace", |_, _, ns: String| {
-            with_hazel!(hazel => {
+            GlobalHazel::try_with(|hazel| {
                 Ok(hazel.compositor.space.outputs().flat_map(|o| {
                     let map = layer_map_for_output(o);
                     map.layers().filter(|l| l.namespace() == ns).cloned().map(LayerHandle).collect::<Vec<_>>()
@@ -66,7 +71,7 @@ impl UserData for WmLayers {
         });
 
         methods.add_method("depth", |_, _, depth: String| {
-            with_hazel!(hazel => {
+            GlobalHazel::try_with(|hazel| {
                 let target = match depth.as_str() {
                     "background" => Some(LayerDepth::Background),
                     "bottom" => Some(LayerDepth::Bottom),
@@ -82,7 +87,7 @@ impl UserData for WmLayers {
         });
 
         methods.add_method("on_output", |_, _, name: String| {
-            with_hazel!(hazel => {
+            GlobalHazel::try_with(|hazel| {
                 let out = hazel.compositor.space.outputs().find(|o| o.name() == name).cloned();
                 let Some(out) = out else { return Ok(Vec::new()); };
                 let map = layer_map_for_output(&out);
@@ -91,7 +96,7 @@ impl UserData for WmLayers {
         });
 
         methods.add_method("under", |_, _, point: LuaPoint<f64, _>| {
-            with_hazel!(hazel => {
+            GlobalHazel::try_with(|hazel| {
                 for output in hazel.compositor.space.outputs() {
                     let geo = hazel.compositor.space.output_geometry(output);
                     let Some(geo) = geo else { continue; };
@@ -116,7 +121,10 @@ impl UserData for WmLayers {
 }
 
 /// A handle to a layer surface, exposed to Lua as `Layer`.
+#[derive(Clone, PartialEq)]
 pub struct LayerHandle(pub DesktopLayerSurface);
+
+lua_fromlua_userdataonly!(LayerHandle);
 
 impl LayerHandle {
     pub fn namespace(&self) -> String {
@@ -133,7 +141,7 @@ impl LayerHandle {
         .to_owned()
     }
 
-    pub fn position(&self) -> LuaPoint<i32, Logical> {
+    pub fn position(&self) -> mlua::Result<LuaPoint<i32, Logical>> {
         with_hazel!(hazel => {
             for output in hazel.compositor.space.outputs() {
                 let map = layer_map_for_output(output);
@@ -145,7 +153,7 @@ impl LayerHandle {
         })
     }
 
-    pub fn size(&self) -> LuaSize<i32, Logical> {
+    pub fn size(&self) -> mlua::Result<LuaSize<i32, Logical>> {
         with_hazel!(hazel => {
             for output in hazel.compositor.space.outputs() {
                 let map = layer_map_for_output(output);
@@ -158,24 +166,36 @@ impl LayerHandle {
     }
 
     pub fn output(&self) -> Option<WmOutputHandle> {
-        let outputs = crate::core::GlobalHazel::with(|hazel| {
-            hazel
-                .compositor
-                .space
-                .outputs()
-                .cloned()
-                .collect::<Vec<_>>()
-        });
-        for output in &outputs {
-            let map = layer_map_for_output(output);
-            if map
-                .layer_for_surface(self.0.wl_surface(), WindowSurfaceType::TOPLEVEL)
-                .is_some()
-            {
-                return Some(WmOutputHandle::new(output));
-            }
+        let output = self.0.user_data().get::<LayerOutput>()?.0.upgrade()?;
+        Some(WmOutputHandle::new(&output))
+    }
+
+    pub fn keyboard_interactivity(&self) -> &'static str {
+        match self.0.cached_state().keyboard_interactivity {
+            KeyboardInteractivity::None => "none",
+            KeyboardInteractivity::Exclusive => "exclusive",
+            KeyboardInteractivity::OnDemand => "on_demand",
         }
-        None
+    }
+
+    pub fn anchor(&self, lua: &Lua) -> mlua::Result<Table> {
+        let anchor = LayerProperties::of(&self.0).anchor;
+        let table = lua.create_table()?;
+        table.set("top", anchor.contains(Anchor::TOP))?;
+        table.set("bottom", anchor.contains(Anchor::BOTTOM))?;
+        table.set("left", anchor.contains(Anchor::LEFT))?;
+        table.set("right", anchor.contains(Anchor::RIGHT))?;
+        Ok(table)
+    }
+
+    pub fn margin(&self, lua: &Lua) -> mlua::Result<Table> {
+        let properties = LayerProperties::of(&self.0);
+        let table = lua.create_table()?;
+        table.set("top", properties.margin_top)?;
+        table.set("right", properties.margin_right)?;
+        table.set("bottom", properties.margin_bottom)?;
+        table.set("left", properties.margin_left)?;
+        Ok(table)
     }
 
     pub fn close(&self) {
@@ -187,24 +207,44 @@ impl UserData for LayerHandle {
     fn add_methods<M: mlua::prelude::LuaUserDataMethods<Self>>(methods: &mut M) {
         methods.add_method("namespace", |_, this, _: ()| Ok(this.namespace()));
         methods.add_method("layer", |_, this, _: ()| Ok(this.layer_name()));
-        methods.add_method("position", |_, this, _: ()| Ok(this.position()));
-        methods.add_method("size", |_, this, _: ()| Ok(this.size()));
+        methods.add_method("position", |_, this, _: ()| this.position());
+        methods.add_method("size", |_, this, _: ()| this.size());
         methods.add_method("output", |_, this, _: ()| Ok(this.output()));
+        methods.add_method("kind", |_, _, _: ()| Ok("layer"));
+        methods.add_method("keyboard_interactivity", |_, this, _: ()| {
+            Ok(this.keyboard_interactivity())
+        });
+        methods.add_method("anchor", |lua, this, _: ()| this.anchor(lua));
+        methods.add_method("margin", |lua, this, _: ()| this.margin(lua));
+        methods.add_method("exclusive_zone", |_, this, _: ()| Ok(LayerProperties::of(&this.0).exclusive_zone));
+        methods.add_method("exclusive_edge", |_, this, _: ()| {
+            Ok(LayerProperties::of(&this.0).exclusive_edge.and_then(edge_name))
+        });
+        methods.add_method("requested_size", |_, this, _: ()| {
+            let properties = LayerProperties::of(&this.0);
+            Ok(LuaSize::<i32, Logical>((properties.requested_width, properties.requested_height).into()))
+        });
         methods.add_method("close", |_, this, _: ()| {
             this.close();
             Ok(())
         });
+
+        lua_eq!(methods);
     }
 }
 
 lua_typedef!(WmLayers => WmLayers {
+    use new_surface => Layer;
+    use mapped => Layer;
+    use changed => Layer;
+    use remove_surface => Layer;
     fn count() -> number;
-    fn get(index: number) -> Layer;
+    fn get(index: number) -> Option<Layer>;
     fn all() -> Array<Layer>;
     fn namespace(name: string) -> Array<Layer>;
     fn depth(depth: string) -> Array<Layer>;
     fn on_output(name: string) -> Array<Layer>;
-    fn under(point: Point) -> Layer;
+    fn under(point: Point) -> Option<Layer>;
 });
 
 lua_typedef!(Layer => LayerHandle {
@@ -212,6 +252,13 @@ lua_typedef!(Layer => LayerHandle {
     fn layer() -> string;
     fn position() -> Point;
     fn size() -> Size;
-    fn output() -> WmOutput;
+    fn output() -> Option<WmOutput>;
+    fn kind() -> string;
+    fn keyboard_interactivity() -> string;
+    fn anchor() -> LayerAnchor;
+    fn margin() -> LayerMargin;
+    fn exclusive_zone() -> integer;
+    fn exclusive_edge() -> Option<string>;
+    fn requested_size() -> Size;
     fn close() -> nil;
 });

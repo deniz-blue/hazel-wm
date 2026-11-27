@@ -9,11 +9,12 @@ use smithay::{
             element::{
                 AsRenderElements, Kind,
                 memory::{MemoryBuffer, MemoryRenderBuffer, MemoryRenderBufferRenderElement},
-                surface::WaylandSurfaceRenderElement,
+                solid::SolidColorRenderElement,
+                surface::{WaylandSurfaceRenderElement, render_elements_from_surface_tree},
             },
         },
     },
-    desktop::{layer_map_for_output, space::SurfaceTree},
+    desktop::{layer_map_for_output, space::SurfaceTree, utils::send_frames_surface_tree},
     input::pointer::CursorImageStatus,
     reexports::{
         calloop::{
@@ -22,14 +23,15 @@ use smithay::{
         },
         drm::control::crtc::Handle as CrtcHandle,
     },
-    utils::{IsAlive, Scale, Size, Transform},
+    reexports::wayland_protocols::xdg::shell::server::xdg_toplevel,
+    utils::{IsAlive, Rectangle, Scale, Size, Transform},
     wayland::shell::wlr_layer::Layer,
 };
 use tracing::info;
 
 use crate::{
     backend::Backend,
-    core::{Hazel, compositor::HazelCompositor},
+    core::{Hazel, compositor::HazelCompositor, window_borders::border_elements},
 };
 
 smithay::backend::renderer::element::render_elements! {
@@ -37,6 +39,7 @@ smithay::backend::renderer::element::render_elements! {
     Space=WaylandSurfaceRenderElement<R>,
     Wrapped=smithay::backend::renderer::element::Wrap<WaylandSurfaceRenderElement<R>>,
     Memory=MemoryRenderBufferRenderElement<R>,
+    Solid=SolidColorRenderElement,
 }
 
 const CURSOR_SIZE: i32 = 16;
@@ -93,7 +96,7 @@ impl HazelCompositor {
                         states
                             .data_map
                             .get::<smithay::input::pointer::CursorImageSurfaceData>()
-                            .map(|d| d.lock().unwrap().hotspot)
+                            .map(|d| crate::core::locking::LockRecovering::lock_recovering(d).hotspot)
                     })
                     .unwrap_or_default();
 
@@ -170,36 +173,122 @@ impl HazelCompositor {
         &self,
         renderer: &mut R,
         output: &smithay::output::Output,
+        fullscreen: bool,
     ) -> Vec<HazelElement<R>>
     where
         R: ImportAll + ImportMem,
-        <R as RendererSuper>::TextureId: Clone + 'static,
+        <R as RendererSuper>::TextureId: Send + Clone + 'static,
     {
-        let output_geometry = match self.space.output_geometry(output) {
-            Some(g) => g,
-            None => return Vec::new(),
+        let Some(output_geometry) = self.space.output_geometry(output) else {
+            return Vec::new();
         };
-
         let output_scale = Scale::from(output.current_scale().fractional_scale());
 
-        let mut elements = Vec::new();
+        self.space
+            .elements()
+            .rev()
+            .filter(|window| {
+                self.window_has_state(window, xdg_toplevel::State::Fullscreen) == fullscreen
+            })
+            .flat_map(|window| {
+                let location = self.window_location(window);
+                let origin = location - window.geometry().loc;
+                let pos = (origin - output_geometry.loc)
+                    .to_f64()
+                    .to_physical(output_scale)
+                    .to_i32_round();
+                let content = window.render_elements::<HazelElement<R>>(renderer, pos, output_scale, 1.0);
+                let shapes = self.window_shape_elements(renderer, window, location - output_geometry.loc, output_scale);
+                let inner = Rectangle::new(location, window.geometry().size);
+                let border = if inner.size.is_empty() {
+                    Vec::new()
+                } else {
+                    border_elements(window, inner, output_geometry.loc, output_scale)
+                };
+                shapes
+                    .in_front
+                    .into_iter()
+                    .chain(content)
+                    .chain(border.into_iter().map(HazelElement::Solid))
+                    .chain(shapes.behind)
+                    .collect::<Vec<_>>()
+            })
+            .collect()
+    }
 
-        for window in self.space.elements() {
-            let Some(window_geo) = self.space.element_geometry(window) else {
-                continue;
-            };
-            let pos = (window_geo.loc - output_geometry.loc)
-                .to_f64()
-                .to_physical(output_scale)
-                .to_i32_round();
-            elements.extend(window.render_elements::<HazelElement<_>>(
-                renderer,
-                pos,
-                output_scale,
-                1.0,
-            ));
+    pub fn send_frame_callbacks(&self, output: &smithay::output::Output, time: Duration) {
+        if self.session_lock.is_active() {
+            if let Some(lock_surface) = self.session_lock.surface_on(output) {
+                send_frames_surface_tree(lock_surface.wl_surface(), output, time, Some(Duration::ZERO), |_, _| Some(output.clone()));
+            }
+            return;
         }
+        for window in self.space.elements() {
+            window.send_frame(output, time, Some(Duration::ZERO), |_, _| Some(output.clone()));
+        }
+        self.send_layer_frame_callbacks(output, time);
+    }
 
+    pub fn send_layer_frame_callbacks(&self, output: &smithay::output::Output, time: Duration) {
+        for layer in layer_map_for_output(output).layers() {
+            if layer.alive() {
+                layer.send_frame(output, time, Some(Duration::ZERO), |_, _| Some(output.clone()));
+            }
+        }
+    }
+
+    fn locked_elements<R>(
+        &self,
+        renderer: &mut R,
+        output: &smithay::output::Output,
+    ) -> Vec<HazelElement<R>>
+    where
+        R: ImportAll + ImportMem,
+        <R as RendererSuper>::TextureId: Send + Clone + 'static,
+    {
+        let Some(geometry) = self.space.output_geometry(output) else {
+            return Vec::new();
+        };
+        let scale = Scale::from(output.current_scale().fractional_scale());
+        let surface = self.session_lock.surface_on(output).map(|lock_surface| {
+            render_elements_from_surface_tree(renderer, lock_surface.wl_surface(), (0, 0), scale, 1.0, Kind::Unspecified)
+        });
+        surface
+            .into_iter()
+            .flatten()
+            .map(HazelElement::Space)
+            .chain([HazelElement::Solid(self.session_lock.backdrop(output, geometry, scale))])
+            .collect()
+    }
+
+    pub fn output_elements<R>(
+        &self,
+        renderer: &mut R,
+        output: &smithay::output::Output,
+        with_cursor: bool,
+    ) -> Vec<HazelElement<R>>
+    where
+        R: ImportAll + ImportMem,
+        <R as RendererSuper>::TextureId: Send + Clone + 'static,
+    {
+        let mut elements = Vec::new();
+        if with_cursor {
+            elements.extend(self.cursor_elements(renderer, output));
+        }
+        if self.session_lock.is_active() {
+            elements.extend(self.locked_elements(renderer, output));
+            return elements;
+        }
+        elements.extend(self.layer_elements(renderer, output, Layer::Overlay));
+        elements.extend(self.output_shape_elements(renderer, output, Layer::Overlay));
+        elements.extend(self.window_elements(renderer, output, true));
+        elements.extend(self.layer_elements(renderer, output, Layer::Top));
+        elements.extend(self.output_shape_elements(renderer, output, Layer::Top));
+        elements.extend(self.window_elements(renderer, output, false));
+        elements.extend(self.layer_elements(renderer, output, Layer::Bottom));
+        elements.extend(self.output_shape_elements(renderer, output, Layer::Bottom));
+        elements.extend(self.layer_elements(renderer, output, Layer::Background));
+        elements.extend(self.output_shape_elements(renderer, output, Layer::Background));
         elements
     }
 }
@@ -230,31 +319,7 @@ impl Hazel {
             return;
         };
 
-        let mut elements: Vec<HazelElement<_>> = Vec::new();
-
-        elements.extend(self.compositor.cursor_elements(&mut renderer, &output));
-
-        elements.extend(
-            self.compositor
-                .layer_elements(&mut renderer, &output, Layer::Overlay),
-        );
-
-        elements.extend(
-            self.compositor
-                .layer_elements(&mut renderer, &output, Layer::Top),
-        );
-
-        elements.extend(self.compositor.window_elements(&mut renderer, &output));
-
-        elements.extend(
-            self.compositor
-                .layer_elements(&mut renderer, &output, Layer::Bottom),
-        );
-
-        elements.extend(
-            self.compositor
-                .layer_elements(&mut renderer, &output, Layer::Background),
-        );
+        let elements = self.compositor.output_elements(&mut renderer, &output, true);
 
         let clear_color = [0.2, 0.4, 0.8, 1.0];
         let queued = match surface.compositor.render_frame::<_, _>(
@@ -267,21 +332,7 @@ impl Hazel {
             _ => false,
         };
 
-        for window in self.compositor.space.elements() {
-            window.send_frame(&output, Duration::ZERO, Some(Duration::ZERO), |_, _| {
-                Some(output.clone())
-            });
-        }
-
-        let layer_map = layer_map_for_output(&output);
-        for layer_surface in layer_map.layers() {
-            if layer_surface.alive() {
-                layer_surface.send_frame(&output, Duration::ZERO, Some(Duration::ZERO), |_, _| {
-                    Some(output.clone())
-                });
-            }
-        }
-        drop(layer_map);
+        self.compositor.send_frame_callbacks(&output, Duration::ZERO);
 
         if queued {
             info!("Flip on {} ({} elements)", output.name(), elements.len());

@@ -41,17 +41,21 @@ impl LuaEventHandler {
         args: A,
     ) -> Result<(), mlua::Error> {
         let args = args.into_lua_multi(lua)?;
-        if let Some(handlers) = self.handlers.borrow_mut().get(&event_name) {
-            for handler in handlers {
-                if let Ok(handler_fn) = lua.registry_value::<Function>(handler)
-                    && let Err(e) = handler_fn.call::<mlua::Value>(args.clone())
-                {
-                    error!(
-                        "Error occurred while calling event handler for event: {}",
-                        event_name
-                    );
-                    error!("Error details: {}", e);
-                }
+        let handlers: Vec<Function> = self
+            .handlers
+            .borrow()
+            .get(&event_name)
+            .into_iter()
+            .flatten()
+            .filter_map(|key| lua.registry_value::<Function>(key).ok())
+            .collect();
+        for handler in handlers {
+            if let Err(e) = handler.call::<mlua::Value>(args.clone()) {
+                error!(
+                    "Error occurred while calling event handler for event: {}",
+                    event_name
+                );
+                error!("Error details: {}", e);
             }
         }
         Ok(())
